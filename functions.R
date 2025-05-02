@@ -201,6 +201,8 @@ prey.mass <- function(mass, variance = FALSE) {
 patches <- function(mass, width = 20, pred = FALSE,
                     type = c("uniform", "random")) {
   
+  type <- match.arg(type)
+  
   # var[position]
   
   if(pred){SIG <- pred.SIG(mass)} else{
@@ -232,17 +234,6 @@ patches <- function(mass, width = 20, pred = FALSE,
   return(FOOD)
 }
 
-##test to make sure it works 
-
-food_patch <- patches(mass = 10, width = 20, pred = FALSE, type = "uniform")
-food_patch
-
-terra::plot(food_patch, main = "Food Patch")
-
-unique(values(food_patch))
-
-ncell(food_patch)
-res(food_patch)
 
 #----------------------------------------------------------------------
 # Count the number of patches visited (assumes immediate renewal)
@@ -282,6 +273,30 @@ sampling <- function(mass, crossings = 20) {
            interval)
   
   #return the vector of sampling times
+  return(t)
+}
+
+#----------------------------------------------------------------------
+# trying something new for "lifespan" and sampling interval
+#----------------------------------------------------------------------
+
+sampling2.0 <- function(mass, crossings = 20, risk_factor = 0) {
+  
+  #baseline lifespan using allometric scaling (L ~ M^0.25)
+  base_lifespan <- 1 * mass^0.25 #adjust constant?
+
+  #adjusted lifespan with movement timescale and risk penalty (morality associated with environment)
+  adj_lifespan <- base_lifespan * (round(prey.tau_p(mass))) * exp(-risk_factor * crossings)
+  
+  #sampling interval (tau_v)
+  interval <- round(prey.tau_v(mass))
+  
+  #lifespan and sampling interval for simulations
+  t <- seq(0,
+           adj_lifespan,
+           by = interval)
+  
+  #return vector of sampling times
   return(t)
 }
 
@@ -344,8 +359,8 @@ encounter <- function(prey.tracks, pred.tracks, range = 50){
   encounters <- vector()
   for(i in 1:length(prey.tracks)){
     #Pairwise separation distances over time
-    distances[[i]] <- SLD(PRED_tracks[[1]]$x,PRED_tracks[[1]]$y,
-                          PREY_tracks[[i]]$x, PREY_tracks[[i]]$y)
+    distances[[i]] <- SLD(pred.tracks[[1]]$x,pred.tracks[[1]]$y,
+                          prey.tracks[[i]]$x, prey.tracks[[i]]$y)
     
     #Did it encounter a predator
     encounters[i] <- any(distances[[i]]<range)
