@@ -98,7 +98,42 @@ HR2 <- akde(SIM2, FIT2)
 
 plot(SIM2, UD = HR2)
 
+#----------------------------------------------------------------------
+# layer the food raster
+#----------------------------------------------------------------------
 
+#prey movement parameters
+prey_tau_p <- prey.tau_p(mass_prey, variance = FALSE)
+prey_tau_v <- prey.tau_v(mass_prey, variance = FALSE)
+prey_sig <- prey.SIG(mass_prey)
+prey_lv <- sqrt((prey_tau_v/prey_tau_p)*prey_sig)
 
+#generate raster
+FOOD <- patches(mass = mass_prey, width = 20, pred = FALSE, type = "uniform")
+plot(FOOD, main = "Resource Landscape")
 
+#generate model
+mod3 <- ctmm(tau = c(prey_tau_p, prey_tau_v),
+             mu = c(0,0),
+             sigma = prey_sig)
+
+#simulate movement
+t3 <- seq(0, 5 %#% "month", 1 %#% "hour")
+SIM3 <- simulate(mod3, t = t3)
+
+#extract raster values along path
+track_df <- data.frame(x = SIM3$x, y = SIM3$y)
+track_prey <- vect(track_df, geom = c("x", "y"))
+res_vals <- extract(FOOD, track_prey)[, 2]
+total_resources <- sum(res_vals, na.rm = TRUE)
+cat("total resource encountered by prey:", total_resources, "\n")
+
+#fit and visualize
+
+GUESS3 <- ctmm.guess(SIM3, interactive = FALSE)
+FIT3 <- ctmm.select(SIM3, GUESS3, cores = -1)
+
+HR3 <- akde(SIM3, FIT3)
+
+plot(SIM3, UD = HR3)
 
