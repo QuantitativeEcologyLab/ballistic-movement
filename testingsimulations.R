@@ -26,215 +26,79 @@ mass_pred <- 5000
 # Prey mass (g)
 mass_prey <- 1000
 
-# "Lifespan" and sampling interval for the simulations
-t <- sampling2.0(mass_prey, crossings = 20, risk_factor = 0.05)
-
-# Energetic value of a patch (based on prey BMR)
-CALS <- ((10^(0.774 + 0.727*log10(mass_prey)))^1.22)/150
-
-# Number of preds & prey in each "arena"
-n_prey <- floor(1/mass_pred^(-0.25))
-n_pred <- 1
-
-# Number of "arenas"
-REPS <- 2
-
-# Number of generations
-GENS <- 2
-
-# Build the raster of food patches for prey to feed on
-FOOD <- patches(mass_pred,
-                width = 20,
-                pred = T, type = "uniform")
 
 #----------------------------------------------------------------------
-# Run the simulation
+# testing prey.mod function
 #----------------------------------------------------------------------
 
-# Initialize lists for storing results
-prey_res <- list()
-prey_details <- list()
-pred_res <- list()
-pred_details <- list()
+#generate movement model
 
-# Loop over the number of generations
-for(G in 1:GENS){
+mod <- prey.mod(mass_prey, variance = FALSE)
+
+#define the sampling duration/schedule
+
+t <- seq(0,5 %#% 'month', 1 %#% 'hr')
+
+#simulate model
+
+SIM <- simulate(mod,t = t)
+
+#fit model to it
+
+GUESS <- ctmm.guess(SIM, interactive = FALSE)
+
+FIT <- ctmm.select(SIM, GUESS, cores = -1)
+
+summary(FIT)
+
+# home range estimate
+
+HR <- akde(SIM, FIT)
+
+#visualize the results
+
+plot(SIM, UD = HR)
+
+#wahoo prey.mod creates movement data with ctmm
+
+#----------------------------------------------------------------------
+# testing movement parameters based on mass function(s)
+#----------------------------------------------------------------------
+
+#prey movement parameters
+  prey_tau_p <- prey.tau_p(mass_prey, variance = FALSE)
+  prey_tau_v <- prey.tau_v(mass_prey, variance = FALSE)
+  prey_sig <- prey.SIG(mass_prey)
+  prey_lv <- sqrt((prey_tau_v/prey_tau_p)*prey_sig)
   
-  # Empty lists for storing the results of the current generation
-  prey <- list()
-  pred <- list()
-  
-  cat("Starting Generation", G, "\n")  # Debugging output
-  
-  for(R in 1:REPS){
-    
-    cat("Running Arena", R, "\n")  # Debugging output
-    
-    # Generate the prey movement models
-    # If the first gen, generate movement parameters from the mass functions
-    if(G == 1){
-      # Generate the HR centres of the prey
-      CENTRES <- rbvpois(n = n_prey,
-                         a = pred.SIG(mass_pred)*.75,
-                         b = pred.SIG(mass_pred)*.75,
-                         c = 0)
-      CENTRES <- scale(CENTRES, scale = FALSE)
-      
-      PREY_mods <- list()
-      for(i in 1:n_prey){
-        # Prey movement parameters
-        prey_tau_p <- prey.tau_p(mass_prey, variance = TRUE)
-        prey_tau_v <- sample(1:(prey_tau_p-1), 1)
-        prey_sig <- prey.SIG(mass_prey)
-        prey_lv <- sqrt((prey_tau_v/prey_tau_p)*prey_sig)
-        
-        PREY_mods[[i]] <- ctmm(tau = c(prey_tau_p,prey_tau_v),
-                               mu = c(CENTRES[i,1],CENTRES[i,2]),
-                               sigma = prey_sig)
-      }
-      
-      PRED_mods <- list()
-      for(i in 1:n_pred){
-        # Predator movement parameters
-        pred_tau_p <- pred.tau_p(mass_pred, variance = TRUE)
-        pred_tau_v <- sample(1:(pred_tau_p-1), 1)
-        pred_sig <- pred.SIG(mass_pred)
-        pred_lv <- sqrt((pred_tau_v/pred_tau_p)*pred_sig)
-        
-        PRED_mods[[i]] <- ctmm(tau = c(pred_tau_p,
-                                       pred_tau_v),
-                               mu = c(0,0),
-                               sigma = pred_sig)
-      }
-    }  # End of first generation
-    
-    # Simulate the prey movement using lapply (no parallelization)
-    prey.tracks <- lapply(PREY_mods,
-                          FUN = simulate,
-                          t = t)
-    
-    # Debugging: Check if prey.tracks are populated
-    cat("Simulated Prey Tracks\n")
-    if (length(prey.tracks) == 0) {
-      cat("No prey tracks generated! \n")
-    }
-    
-    # Simulate the predator movement
-    pred.tracks <- list()
-    for(i in 1:n_pred){
-      pred.tracks[[i]] <- simulate(PRED_mods[[i]], t = t)
-    }
-    
-    # Calculate prey benefits
-    benefits_prey <- vector()
-    for(i in 1:n_prey){
-      benefits_prey[i] <- grazing(prey.tracks[[i]], FOOD)
-    }
-    
-    # Debugging: Check if benefits_prey are populated
-    cat("Calculated Prey Benefits\n")
-    if (length(benefits_prey) == 0) {
-      cat("No benefits for prey! \n")
-    }
-    
-    # Count the encounters (only setup for single predator/arena)
-    encounters <- encounter(prey.tracks = prey.tracks,
-                            pred.tracks = pred.tracks,
-                            range = sqrt(pred.SIG(mass_pred))*.05) # Perceptual range scaled to HR size
-    
-    # Calculate prey fitness
-    offspring_prey <- prey.fitness(benefits = benefits_prey,
-                                   costs = encounters,
-                                   mass_prey,
-                                   crossings = 30,
-                                   models = PREY_mods,
-                                   calories = CALS)
-    
-    # Calculate predator fitness
-    offspring_pred <- pred.fitness(encounters = encounters,
-                                   mass = mass_pred,
-                                   models = PRED_mods,
-                                   time = t)
-    
-    # Get the values of the prey movement model parameters
-    prey_lvs <- vector()
-    prey_TAU_V <- vector() 
-    prey_TAU_P <- vector()
-    prey_SIGMA <- vector()
-    prey_SPEED <- vector()
-    for(i in 1:n_prey){
-      prey_TAU_V[i] <- PREY_mods[[i]]$tau["velocity"]
-      prey_TAU_P[i] <- PREY_mods[[i]]$tau["position"]
-      prey_SIGMA[i] <- ctmm:::area.covm(PREY_mods[[i]]$sigma)
-      prey_SPEED[i] <- if(nrow(summary(PREY_mods[[i]], units = FALSE)$CI)==4){
-        summary(PREY_mods[[i]], units = FALSE)$CI[4,2]} else{Inf}
-      prey_lvs[i] <- sqrt((prey_TAU_V[i]/prey_TAU_P[i])*prey_SIGMA[i])
-    }
-    
-    # Summarize the results of the prey 
-    prey[[R]] <- data.frame(generation = G,
-                            tau_p = prey_TAU_P,
-                            tau_v = prey_TAU_V,
-                            sig = prey_SIGMA,
-                            speed = prey_SPEED,
-                            lv = prey_lvs,
-                            patches = benefits_prey,
-                            encounter = encounters,
-                            offspring = offspring_prey)
-    
-    # Debugging: Check if prey data is generated
-    cat("Prey Data Summary:\n")
-    print(head(prey[[R]]))
-    
-    # Get the values of the predator movement model parameters
-    pred_lvs <- vector()
-    pred_TAU_V <- vector() 
-    pred_TAU_P <- vector()
-    pred_SIGMA <- vector()
-    pred_SPEED <- vector()
-    for(i in 1:n_pred){
-      pred_TAU_V[i] <- PRED_mods[[i]]$tau["velocity"]
-      pred_TAU_P[i] <- PRED_mods[[i]]$tau["position"]
-      pred_SIGMA[i] <- ctmm:::area.covm(PRED_mods[[i]]$sigma)
-      pred_SPEED[i] <- if(nrow(summary(PRED_mods[[i]], units = FALSE)$CI)==4){
-        summary(PRED_mods[[i]], units = FALSE)$CI[4,2]} else{Inf}
-      pred_lvs[i] <- sqrt((pred_TAU_V[i]/pred_TAU_P[i])*pred_SIGMA[i])
-    }
-    
-    # Summarize the results of the predator
-    pred[[R]] <- data.frame(generation = G,
-                            tau_p = pred_TAU_P,
-                            tau_v = pred_TAU_V,
-                            sig = pred_SIGMA,
-                            speed = pred_SPEED,
-                            lv = pred_lvs,
-                            encounter = sum(encounters),
-                            offspring = offspring_pred)
-    
-  }
-  
-  # Compile the results from the generation
-  prey <- do.call(rbind, prey)
-  pred <- do.call(rbind, pred)
-  
-  # Save the results for the generation
-  prey_res[[G]] <- data.frame(generation = G,
-                              lv = mean(prey$lv),
-                              var = var(prey$lv),
-                              pred_lv = mean(pred$lv))
-  
-  prey_details[[G]] <- prey
-  
-  pred_res[[G]] <- data.frame(generation = G,
-                              lv = mean(pred$lv),
-                              var = var(pred$lv))
-  
-  pred_details[[G]] <- pred
-  
-  # Debugging: Print the results
-  cat("Generation", G, "Results:\n")
-  print(prey_res[[G]])
-  print(pred_res[[G]])
-  
-}
+#generate model
+  mod2 <- ctmm(tau = c(prey_tau_p,prey_tau_v),
+                         mu = c(0,0),
+                         sigma = prey_sig)
+
+#define the sampling duration/schedule
+
+t2 <- seq(0,5 %#% 'month', 1 %#% 'hr')
+
+#simulate model
+
+SIM2 <- simulate(mod2,t = t2)
+
+#fit model to it
+
+GUESS2 <- ctmm.guess(SIM2, interactive = FALSE)
+
+FIT2 <- ctmm.select(SIM2, GUESS2, cores = -1)
+
+summary(FIT2)
+
+HR2 <- akde(SIM2, FIT2)
+
+#visualize the results
+
+plot(SIM2, UD = HR2)
+
+
+
+
 
