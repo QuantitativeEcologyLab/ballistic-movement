@@ -12,6 +12,7 @@ set.seed(1)
 library(extraDistr)
 library(ctmm)
 library(terra)
+library(deSolve)
 
 # Source the functions (ensure 'functions.R' is available in the working directory)
 source("functions.R")
@@ -128,6 +129,12 @@ res_vals <- extract(FOOD, track_prey)[, 2]
 total_resources <- sum(res_vals, na.rm = TRUE)
 cat("total resource encountered by prey:", total_resources, "\n")
 
+#use grazing function
+patch_visits <- grazing(track_df, FOOD, metric = "patches")
+print(patch_visits)
+time_between <- grazing(track_df, FOOD, metric = "time")
+print(time_between)
+
 #fit and visualize
 
 GUESS3 <- ctmm.guess(SIM3, interactive = FALSE)
@@ -137,3 +144,67 @@ HR3 <- akde(SIM3, FIT3)
 
 plot(SIM3, UD = HR3)
 
+#----------------------------------------------------------------------
+# calculate fitness 
+#----------------------------------------------------------------------
+
+#prey movement parameters
+prey_tau_p <- prey.tau_p(mass_prey, variance = FALSE)
+prey_tau_v <- prey.tau_v(mass_prey, variance = FALSE)
+prey_sig <- prey.SIG(mass_prey)
+prey_lv <- sqrt((prey_tau_v/prey_tau_p)*prey_sig)
+
+#generate raster
+FOOD2 <- patches(mass = mass_prey, width = 20, pred = FALSE, type = "uniform")
+plot(FOOD2, main = "Resource Landscape")
+
+#generate model
+mod4 <- ctmm(tau = c(prey_tau_p, prey_tau_v),
+             mu = c(0,0),
+             sigma = prey_sig)
+
+#simulate movement
+t4 <- seq(0, 5 %#% "month", 1 %#% "hour")
+SIM4 <- simulate(mod4, t = t4)
+
+#extract raster values along path
+track_df2 <- data.frame(x = SIM4$x, y = SIM4$y)
+track_prey2 <- vect(track_df2, geom = c("x", "y"))
+res_vals2 <- extract(FOOD, track_prey2)[, 2]
+total_resources2 <- sum(res_vals2, na.rm = TRUE)
+cat("total resource encountered by prey:", total_resources, "\n")
+
+#use grazing function
+patch_visits2 <- grazing(track_df2, FOOD, metric = "patches")
+print(patch_visits2)
+time_between2 <- grazing(track_df2, FOOD, metric = "time")
+print(time_between2)
+
+#fit and visualize
+
+GUESS4 <- ctmm.guess(SIM4, interactive = FALSE)
+FIT4 <- ctmm.select(SIM4, GUESS4, cores = -1)
+
+HR4 <- akde(SIM4, FIT4)
+
+plot(SIM4, UD = HR4)
+
+#calculate fitness and lifespan
+prey_offspring <- prey.fitness.deb(benefits = total_resources2, mass = mass_prey, costs = 0, 
+                 models = mod4, 
+                 crossings = 20, 
+                 calories = 10, 
+                 alpha = 0.25,
+                 beta = 0.75,
+                 kap = 0.5,
+                 metric = "offspring")
+print(prey_offspring)
+prey_lifespan <- prey.fitness.deb(benefits = total_resources2, mass = mass_prey, costs = 0, 
+                                  models = mod4, 
+                                  crossings = 20, 
+                                  calories = 10, 
+                                  alpha = 0.25,
+                                  beta = 0.75,
+                                  kap = 0.5,
+                                  metric = "lifespan")
+print(prey_lifespan)

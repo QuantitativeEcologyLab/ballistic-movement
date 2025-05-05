@@ -241,10 +241,17 @@ patches <- function(mass, width = 20, pred = FALSE,
 
 grazing <- function(track, habitat, metric = "patches") {
   
+  #ensure input is a data fram with x and y columns
+  if (!all(c("x", "y") %in% colnames(track))) {
+    stop("Track must have 'x' and 'y' columns.")
+  }
+  
+  #convert track to matrix for terra:cellFromXY
+  coords <- as.matrix(track[, c("x", "y")])
+  
   #Patch identities
-  IDs <- suppressWarnings(cellFromXY(habitat,
-                                     SpatialPoints.telemetry(track))
-  )
+  IDs <- cellFromXY(habitat, coords)
+  
   # Count the number of times it moved to a new food patch
   PATCHES <- sum(diff(IDs) != 0)
   
@@ -252,7 +259,8 @@ grazing <- function(track, habitat, metric = "patches") {
   TIME <- mean(rle(c(FALSE, diff(IDs) != 0))$lengths)
   
   if(metric == "patches"){return(PATCHES)}
-  if(metric == "time"){return(TIME)}
+  if(metric == "time"){return(TIME)
+    stop("Invalid metric. Use 'patches' or 'time'.")}
 }
 
 #----------------------------------------------------------------------
@@ -318,7 +326,7 @@ prey.fitness <- function(benefits, mass, costs = NULL, models, crossings = 20, c
   BMR <- 10^BMR
   
   # total lifespan in days (based on number of range crossings)
-  lifespan <- round(prey.tau_p(mass)*crossings) /60/60/24
+  lifespan <- round(prey.tau_p(mass)*crossings) /60/60/24 
   
   # Metabolic cost of movement in watts/kg from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1 
   E = 10.7*(mass/1000)^(-0.316)*SPEED + 6.03*(mass/1000)^(-0.303)
@@ -348,6 +356,83 @@ prey.fitness <- function(benefits, mass, costs = NULL, models, crossings = 20, c
   # individuals that encountered a predator are killed and don't reproduce.
   if(!is.null(costs)){offspring[costs] <- 0}
   offspring
+}
+
+#----------------------------------------------------------------------
+# Prey fitness function 2.0
+#----------------------------------------------------------------------
+
+prey.fitness.deb <- function(benefits, 
+                             mass, 
+                             costs = NULL, 
+                             models, 
+                             crossings = 20, 
+                             calories = 10, 
+                             alpha = 0.25,
+                             beta = 0.75,
+                             kap = 0.5,
+                             risk_factor = 0,
+                             metric = "offspring"){
+  
+  # Extract movement speeds from the models
+  SPEED <- sapply(models, function(m) {
+    ci <- tryCatch(summary(m, units = FALSE)$CI, error = function(e) NULL)
+    if (is.data.frame(ci) && nrow(ci) >= 4) {
+      ci[4, 2]
+    } else {
+      Inf
+    }
+  })
+  
+  # Basal metabolic rate (in kj/day) from Nagy 1987 https://doi.org/10.2307/1942620 
+  BMR <- 0.774 + 0.727*log10(mass)
+  
+  #Back transform 
+  BMR <- 10^BMR
+  
+  # total lifespan in days (based on number of range crossings)
+  lifespan <- (1 * mass^0.25) * (round(prey.tau_p(mass))) * exp(-risk_factor * crossings)
+  
+  # Metabolic cost of movement in watts/kg from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1 
+  E = 10.7*(mass/1000)^(-0.316)*SPEED + 6.03*(mass/1000)^(-0.303)
+  
+  #Convert to kJ/s
+  E <- (E * (mass/1000))/1000
+  
+  #### Maximum running speed in km/hr from Hirt et al. 2017 https://doi.org/10.1038/s41559-017-0241-4
+  v_max <- 25.5 * (mass/1000)^(0.26) * (1 - exp(-22*(mass/1000)^(-0.66)))
+  
+  #Convert to m/s
+  v_max <- v_max/3.6
+  
+  #energy for somatic maintenance
+  maintenance_energy <- BMR * lifespan
+  
+  #energy for growth
+  growth_energy <- (1 - alpha) * mass^beta * lifespan
+  
+  #reserve energy (surplus)
+  reserve_energy <- benefits * calories - (maintenance_energy + growth_energy)
+  
+  #if the reserve energy is positive, allocate energy to reproduction
+  if (reserve_energy > 0) {
+    offspring <- floor(kap * reserve_energy / BMR) # Number of offspring based on available reserve
+  } else {
+    offspring <- 0
+  }
+  
+  #if predator encounters are being considered, individuals that encountered a predator are killed and don't reproduce
+  if (!is.null(costs)) {
+    offspring[costs] <- 0
+  }
+  
+  #clamp offspring
+  offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #Clamp the minimum to 0
+  
+  #return
+  if(metric == "lifespan"){return(lifespan)}
+  else if (metric == "offspring"){return(offspring)} else {
+    stop("Invalid metric. Use 'lifespan' or 'offspring'.")}
 }
 
 #----------------------------------------------------------------------
