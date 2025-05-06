@@ -1,0 +1,372 @@
+---
+title: "ballistic_length_pseudocode"
+author: "Lynndsay Terpsma"
+date: "2025-05-06"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+this document contains the pseudocode for the '50000g_pred.R' file, 
+for the ballsitic length scale simulation project. 
+
+### Step 1: set working directory###
+*define the directory path for the project*  
+CALL setwd("C:/Users/lterp/Desktop/OneDrive -  
+UBC/_URAproject/ballistic_movement_models/ballistic_movement_models")
+
+### Step 2: set the random seed###
+*initialize the random number generator with a seed to ensure reproducibility*  
+CALL set.seed(1)
+
+### Step 3: import necessary packages
+*load the required libraries for extra distributions and parallel processing*  
+CALL library(extraDistr)  
+CALL library(parallel)
+
+### Step 4: source the functions
+*load the custom functions used in the project*  
+CALL source("functions.R")
+
+### Step 5: define the number of cores used  
+SET Ncores = 10
+
+### Step 6: set the global parameters
+*set the predator mass (g)*  
+SET mass_pred = 50000
+
+*set the prey mass (g)*  
+SET mass_prey = CALL prey.mass(mass_pred)
+
+*define the "lifespan" and sampling interval for simulations*  
+SET t = CALL sampling(mass_prey, crossings = 30)
+
+*define energetic value of a patch (based on prey BMR)*  
+SET CALS = ((10^(0.774 + 0.727*log10(mass_prey)))^1.22)/150
+
+*define the number of predators and prey in each "arena"*  
+SET n_prey = CALL floor(1/mass_pred^(-0.25))  
+SET n_pred = 1
+
+*define the number of "arenas"*  
+SET REPS = 500
+
+*define the number of generations*  
+SET GENS = 300
+
+*build the raster of food patches for prey to feed on*  
+SET FOOD = CALL patches(mass_pred, 
+                        width = CALL round(sqrt(pred.SIG(mass_prey))/10), 
+                        pred = T)
+                       
+*generate lists for storing results and drawing parameters*  
+SET prey_res = CALL list()
+SET prey_details = CALL list()
+
+SET pred_res = CALL list()
+SET pred_details = CALL list()
+
+### Step 7: run the simulation
+
+*loop over the number of generations*  
+SEQUENCE(G = 1 to GENS) // for each generation G
+
+>*initialize empty lists for storing the results of the current generation*  
+SET prey = CALL list()  
+SET pred = CALL list()
+  
+>SEQEUENCE (R = 1 to REPS) // for each repetition (arena) R  
+*if it's the first generation, generate movement models for prey*  
+IF G == 1 THEN
+
+>*generate the HR centers of the prey*  
+SET CENTRES = CALL rbvpois(n = n_prey, a = CALL pred.SIG(mass_pred) * 0.75, b = CALL pred.SIG(mass_pred) * 0.75, c = 0)
+
+>*scale CENTRES without changing the scale*  
+SET CENTRES = CALL scale(CENTRES, scale = FALSE)
+
+>*initialize an empty list to store the prey movement models*  
+SET PREY_mods = empty list
+
+>*loop over each prey in the population*  
+FOR i FROM 1 TO n_prey DO 
+
+> >*set prey positional autocorrelation*  
+SET prey_tau_p = CALL prey.tau_p(mass_prey) 
+
+> >*set velocity autocorrelation using one of two mutually exclusive methods*  
+IF using mass-based model THEN  
+SET prey_tau_v = CALL prey.tau_V(mass_prey, variance = TRUE)  
+
+> > ELSE  
+SET prey_tau_v = CALL sample(1:prey_tau_p-1), 1)  
+
+> >*set prey spatial variance*  
+SET prey_sig = CALL prey.SIG(mass_prey)  
+
+> >*set prey ballistic length scale*  
+SET prey_lv = CALL sqrt((prey_tau_v/prey_tau_p) * prey_sig)
+
+> >*define movement model using ctmm for i-th prey*  
+SET PREY_mods[[i]] = CALL ctmm(tau = c(prey_tau_p, prey_tau_v), mu = c(CENTRES[i,1], CENTRES[i,2]), sigma = prey_sig)
+
+>END FOR 
+
+>*define predator movement model*  
+FOR i FROM 1 TO n_pred DO
+
+> >*set predator positional autocorrelation*  
+SET pred_tau_p = CALL pred.tau_p(mass_pred, variance = TRUE)  
+
+> >*set velocity autocorrelation using one of two mutually exclusive methods*  
+IF using mass-based model THEN  
+SET pred_tau_v = CALL pred.tau_v(mass_pred, variance = TRUE)
+
+> >ELSE  
+SET pred_tau_v = CALL sample(1:(pred_tau_p-1), 1)
+
+> >*set predator spatial variance*  
+SET pred_sig = CALL pred.SIG(mass_pred)
+
+> >*set predator ballistic length scale*  
+SET pred_lv = CALL sqrt((pred_tau_v/pred_tau_p) * pred_sig)
+
+> >*define movement model using ctmm for i-th predator*  
+SET PRED_mods[[i]] = CALL ctmm(tau = c(pred_tau_p, pred_tau_v), mu = c(0,0), sigma = pred_sig)
+
+>END FOR
+
+END IF
+
+>IF G != 1 THEN
+
+>*generate the HR centres of the prey*  
+SET CENTRES = CALL rbvpois(n = n_prey, a = CALL pred.SIG(mass_pred) * 0.75, b = CALL pred.SIG(mass_pred) * 0.75, c = 0)
+
+>*scale CENTRES without changing the scale*  
+SET CENTRES = CALL scale(CENTRES, scale = FALSE)
+
+>*define the prey movement model*  
+FOR i FROM 1 TO n_prey DO
+
+> >*define the prey position autocorrelation by sampling offspring and adding mutation based variance*  
+SET prey_tau_p = CALL sample(PREY_tau_p, 1) + CALL rnorm(1, 0, 10)
+
+> >*clamp the prey position autocorrelation min to zero*  
+SET prey_tau_p = CALL ctmm:::clamp(prey_tau_p, min = 0.1, max = Inf)
+
+> >*define the prey velocity autocorrelation by sampling offspring and adding mutation based variance*  
+SET prey_tau_v = CALL sample(PREY_tau_v, 1) + CALL rnorm(1, 0, 2)
+
+> >*clamp the prey velocity autocorrelation min to zero*  
+SET prey_tau_v = CALL ctmm:::clamp(prey_tau_v, min = 0.1, max = Inf)
+
+> >*set prey spatial variance from offspring*  
+SET prey_sig = CALL sample(PREY_sig, 1)
+
+> >*set prey ballistic length scale*  
+SET prey_lv = CALL sqrt((prey_tau_v/prey_tau_p) * prey_sig)
+
+> >*define movement using ctmm for i prey*  
+SET PREY_mods[[i]] = CALL ctmm(tau = c(prey_tau_p, prey_tau_v), mu = c(CENTRES[i,1], CENTRES[i,2]), sigma = prey_sig)
+
+>END FOR
+
+>*define predator movement model*  
+FOR i FROM 1 TO n_pred
+
+> >*define predator positional autocorrelation by sampling offspring and adding mutation based variance*  
+SET pred_tau_p = CALL sample(PRED_tau_p, 1) + CALL rnorm(1, 0, 15) 
+
+> >*clamp the predator position autocorrelation min to zero*  
+SET pred_tau_p = CALL ctmm:::clamp(pred_tau_p, min = 0.1, max = Inf)
+
+> >*define predator velocity autocorrelation by sampling offspring and adding mutation based variance*  
+SET pred_tau_v = CALL sample(PREY_tau_v, 1) + CALL rnorm(1, 0, 5)
+
+> >*clamp the predator velocity autocorrelation min to zero*  
+SET pred_tau_v = CALL ctmm:::clamp(prey_tau_v, min = 0.1, max = Inf)
+
+> >*set predator spatial variance*  
+SET pred_sig = CALL sample(PRED_sig, 1)
+
+> >*set predator ballistic length scale*  
+SET pred_lv = CALL sqrt((pred_tau_v/pred_tau_p) * pred_sig) 
+
+> >*define movement using ctmm for i predator*  
+SET PRED_mods[[i]] = CALL ctmm(tau = c(pred_tau_p, pred_tau_v), mu = c(0,0), sigma = pred_sig)
+
+>END FOR
+
+END IF
+
+>*simulate the prey movement, parallelised to speed up run times*  
+SET PREY_tracks = CALL mclapply(PREY_mods, FUN = simulate, t = t, mc.cores = Ncores)
+
+>*simulate the predator movement*  
+SET PRED_tracks = CALL list()  
+FOR i FROM 1 TO n_pred DO
+SET PRED_tracks[[i]] = CALL simulate(PRED_mods[[i]], t = t)
+END FOR
+
+>*calculate prey benefits*  
+SET benefits_prey = empty list  
+FOR i FROM 1 TO n_prey DO
+SET benefits_prey[i] = CALL grazing(PREY_tracks[[i]], FOOD)  
+END FOR
+
+>*count the encounters, only setup for single predator/arena*  
+SET encounters = CALL encounter(prey.tracks = PREY_tracks, pred.tracks = PRED_tracks, range = CALL sqrt(pred.SIG(mass_pred)) * 0.05)
+
+>*calculate prey fitness*  
+SET offspring_prey = CALL prey.fitness(benefits = benefits_prey, costs = encounters, mass_prey, crossings = 30, models = PREY_mods, calories = CALS)
+
+>*calculate predator fitness*  
+SET offspring_pred = CALL pred.fitness(encounters = encounters, mass = mass_pred, models = PRED_mods, time = t)
+
+>*get the values of the prey movement model parameters*  
+SET prey_lvs = empty list  
+SET prey_TAU_V = empty list  
+SET prey_TAU_P = empty list  
+SET prey_SIGMA = empty list  
+SET prey_SPEED = empty list  
+
+>FOR i FROM 1 TO n_prey DO  
+*set velocity autocorrelation from model*  
+SET prey_TAU_V[i] = PREY_mods[i].tau["velocity"]  
+*set position autocorrelation from model*  
+SET prey_TAU_P[i] = PREY_mods[i].tau["position"]  
+*set spatial variance from model*  
+SET prey_SIGMA[i] = CALL ctmm:::area.covm(PREY_mods[i].sigma)  
+*set prey speed*  
+SET prey_model_CI = CALL summary(PREY_mods[i], units = FALSE). CI  
+IF nrow(prey_model_CI) == 4 THEN  
+> > *if yes, get the value from the 4th row and 2nd column of CI*  
+SET prey_SPEED[i] = prey_model_CI[4,2]  
+ELSE  
+> > *if no, set the value to Inf*  
+SET prey_SPEED[i] = Inf  
+*set ballistic length scale from model*  
+SET prey_lvx[i] = CALL sqrt((prey_TAU_V[i]/prey_TAU_P[i]) * prey_SIGMA[i])
+
+>END FOR
+
+>*summarise the results of the prey*  
+SET prey[[R]] = CALL data.frame(generation = G, tau_p = prey_TAU_P, tau_v = prey_TAU_V, sig = prey_SIGMA, speed = prey_SPEED, lv = prey_lvs, patches = benefits_prey, encounter = encounters, offspring = offspring_prey)  
+
+>*get the values of the predator movement model parameters*  
+SET pred_lvs = empty list  
+SET pred_TAU_V = empty list  
+SET pred_TAU_P = empty list  
+SET pred_SIGMA = empty list  
+SET pred_SPEED = empty list
+
+>FOR i FROM 1 TO n_pred DO
+*set velocity autocorrelation from model*  
+SET pred_TAU_V[i] = PRED_mods[i].tau["velocity"]  
+*set position autocorrelation from model*  
+SET pred_TAU_P[i] = PRED_mods[i].tau["position"]  
+*set spatial variance from model*  
+SET pred_SIGMA[i] = CALL ctmm:::area.covm(PREd_mods[i].sigma)  
+*set pred speed*  
+SET pred_model_CI = CALL summary(PREd_mods[i], units = FALSE). CI  
+IF nrow(pred_model_CI) == 4 THEN  
+> > *if yes, get the value from the 4th row and 2nd column of CI*  
+SET pred_SPEED[i] = pred_model_CI[4,2]  
+ELSE  
+> > *if no, set the value to Inf*  
+SET pred_SPEED[i] = Inf  
+*set ballistic length scale from model*  
+SET pred_lvx[i] = CALL sqrt((pred_TAU_V[i]/pred_TAU_P[i]) * pred_SIGMA[i])
+
+>END FOR
+
+>*summarise the results of the prey*  
+SET pred[[R]] = CALL data.frame(generation = G, tau_p = pred_TAU_P, tau_v = pred_TAU_V, sig = pred_SIGMA, speed = pred_SPEED, lv = pred_lvs, encounter = CALL sum(encounters), offspring = offspring_pred) 
+
+END FOR
+
+*compile the results from the generation*  
+SET prey = CALL do.call(rbind, prey)  
+SET pred = CALL do.call(rbind, prey)  
+
+*save the results for the prey*  
+SET prey_res[G] = CALL data.frame(generation = G, lv = CALL mean(prey.lv), var = CALL variance(prey.lv), pred_lv = CALL mean(pred.lv))  
+
+SET prey_details[G] = prey
+
+*save the results for the predator*  
+SET pred_res[G] = CALL data.frame(generation = G, lv = CALL mean(pred.lv), var = CALL variance(prey.lv), pred_lv = CALL mean(pred.lv))  
+
+SET pred_details[G] = pred
+
+*set up the parameters for the next generation of prey based on fitness of current generation*  
+SET PREY_tau_p = empty list  
+SET PREY_tau_v = empty list  
+SET PREY_sig = empty list
+
+**loop over each individual in the prey data**  
+FOR i FROM 1 to nrow(prey) DO  
+
+>*if the individual has offspring (greater than 0)*  
+IF prey[i].offspring > 0 THEN  
+*repeat the tau_p value for each offspring and add to PREY_tau_p*  
+FOR j FROM 1 to prey[i].offspring DO  
+> > ADD prey[i].tau_p TO PREY_tau_p
+END FOR  
+*repeat teh tau_v value for each offspring and add to PREY_tau_v*  
+FOR j FROM 1 to prey[i].offspring DO  
+> > ADD prey[i].tau_v TO PREY_tau_v  
+END FOR  
+*repeat the sig value for each offspring and add to PREY_sig*  
+FOR j FROM 1 TO prey[i].offspring DO  
+> > ADD prey[i].sig TO PREY_sig  
+END FOR  
+
+>END IF  
+
+END FOR
+
+*set up the parameters for the next generation of predators based on fitness of current generation*  
+SET PRED_tau_p = empty list  
+SET PRED_tau_v = empty list  
+SET PRED_sig = empty list
+
+**loop over each individual in the prey data**  
+FOR i FROM 1 to nrow(pred) DO  
+
+>*if the individual has offspring (greater than 0)*  
+IF pred[i].offspring > 0 THEN  
+*repeat the tau_p value for each offspring and add to PRED_tau_p*  
+FOR j FROM 1 to prey[i].offspring DO  
+> > ADD pred[i].tau_p TO PRED_tau_p
+END FOR  
+*repeat teh tau_v value for each offspring and add to PRED_tau_v*  
+FOR j FROM 1 to pred[i].offspring DO  
+> > ADD pred[i].tau_v TO PRED_tau_v  
+END FOR  
+*repeat the sig value for each offspring and add to PRED_sig*  
+FOR j FROM 1 TO preD[i].offspring DO  
+> > ADD pred[i].sig TO PRED_sig  
+END FOR 
+
+END IF  
+
+END FOR  
+
+*save the prey results to files*  
+CALL save(prey_res, to file 'file')  
+CALL save(prey_details, to file 'file')  
+
+*save the predator results to files*  
+CALL save(pred_res, to file 'file')  
+CALL save(pred_details, to file 'file')  
+
+*print the progress for the current generation*  
+CALL print(G)
+
+END FOR

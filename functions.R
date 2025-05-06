@@ -62,7 +62,6 @@ prey.mod <- function(mass, mu = c(0,0), variance = FALSE){
   return(mod)
 }
 
-
 #----------------------------------------------------------------------
 # Generate prey var[position] based on mass (in g)
 #----------------------------------------------------------------------
@@ -81,7 +80,6 @@ prey.SIG <- function(mass, variance = FALSE) {
   #Return
   return(SIG)
 }
-
 
 #----------------------------------------------------------------------
 # Generate prey E[tau_p] based on mass (in g)
@@ -116,9 +114,6 @@ prey.tau_v <- function(mass, variance = FALSE) {
   #Return
   return(tau_v)
 }
-
-
-
 
 #----------------------------------------------------------------------
 # Generate predator var[position] based on mass (in g)
@@ -215,13 +210,13 @@ patches <- function(mass, width = 20, pred = FALSE,
   #number of patches based on fixed patch width
   #N <- EXT/n
   
-  N <- ceiling(2 * EXT / width)
+  N <- EXT / width
   
   #Build the raster
   
   FOOD <- rast(ncol = N, nrow = N, 
-               xmin = -N*width/2, xmax = N*width/2, 
-               ymin = -N*width/2, ymax = N*width/2)
+               xmin = -EXT, xmax = EXT, 
+               ymin = -EXT, ymax = EXT)
   
   # assign values based on type of habitat
   if (type == "uniform") {
@@ -233,7 +228,6 @@ patches <- function(mass, width = 20, pred = FALSE,
   #Return the raster of food patches
   return(FOOD)
 }
-
 
 #----------------------------------------------------------------------
 # Count the number of patches visited (assumes immediate renewal)
