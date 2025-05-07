@@ -380,12 +380,12 @@ prey.fitness.deb <- function(benefits,
   #estimation of lifespan and reproduction
   if(DEB){
     #define DEB parameters
-    p_Am <- 22.5
-    v <- 0.02
-    p_M <- 18
-    E_G <- 2800
-    kappa <- 0.8
-    kappa_R <- 0.95
+    p_Am <- 22.5 #maximum assimilation rate (J/cm^2 day)
+    v <- 0.02 # energy conductance (cm/day)
+    p_M <- 18 # maintenance cost (vol-spec, cm^-3 day^-1)
+    E_G <- 2800 #energy density (J/g)
+    kappa <- 0.8 # efficiency of energy storage (no units)
+    kappa_R <- 0.95 # fraction of energy allocated to reproduction (no units)
     
     #estimate structural volume from mass (assuming density = 1 g/cm^3)
     V <- mass #in g, approximated as cm^3 for simplicity
@@ -409,8 +409,10 @@ prey.fitness.deb <- function(benefits,
     # total reproductive output over lifespan
     lifespan <- mass^(0.25) * round(prey.tau_p(mass)) * exp(-risk_factor * crossings)
     
+    #total reproductive output over lifespan
     R_total <- floor((kappa_R * p_R * lifespan) / E_0)
     
+    #ensure number of offspring is non negative
     offspring <- max(R_total, 0)
     
     # If predator encounters are being considered,
