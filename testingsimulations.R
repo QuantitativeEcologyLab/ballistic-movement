@@ -233,10 +233,10 @@ n_prey <- 10
 REPS <- 20
 
 #number of generations
-GENS <- 6
+GENS <- 10
 
 #build food raster
-FOOD <- patches(mass_prey, width = 20, pred = FALSE, type = "random")
+FOOD <- patches(mass_prey, width = 20, pred = FALSE, type = "uniform")
 
 #lists for storing results
 prey_res <- list()
@@ -373,6 +373,22 @@ res_df$rel_change_lv <- res_df$lv / res_df$lv[1]
 plot(res_df$generation, res_df$rel_change_lv, type = "b", pch = 19,
      xlab = "gen", ylab = "rel change in lv")
 abline(h = 1, lty = 2, col = "gray")
+
+library(ggplot2)
+
+# Flatten list of tracks into data frame
+track_df <- do.call(rbind, lapply(1:length(PREY_tracks), function(i) {
+  data.frame(x = PREY_tracks[[i]]$x,
+             y = PREY_tracks[[i]]$y,
+             t = PREY_tracks[[i]]$t,
+             id = as.factor(i))
+}))
+
+ggplot(track_df, aes(x = x, y = y, group = id, color = id)) +
+  geom_path() +
+  theme_minimal() +
+  labs(title = "Prey Movement Tracks", x = "X", y = "Y") +
+  theme(legend.position = "none")
 
 
 
