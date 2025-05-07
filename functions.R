@@ -243,6 +243,11 @@ grazing <- function(track, habitat, metric = "patches") {
   #convert track to matrix for terra:cellFromXY
   coords <- as.matrix(track[, c("x", "y")])
   
+  #ensure habitat is spatraster
+  if(inherits(habitat, "RasterLayer")) {
+    habitat <- terra::rast(habitat)
+  }
+  
   #Patch identities
   IDs <- cellFromXY(habitat, coords)
   
@@ -275,7 +280,7 @@ sampling <- function(mass, crossings = 20) {
            interval)
   
   #return the vector of sampling times
-  return(t)
+  return(lifespan)
 }
 
 #----------------------------------------------------------------------
@@ -362,73 +367,105 @@ prey.fitness.deb <- function(benefits,
                              models, 
                              crossings = 20, 
                              calories = 10, 
-                             alpha = 0.25,
-                             beta = 0.75,
-                             kap = 0.5,
                              risk_factor = 0,
+                             DEB = FALSE,
+                             constant = 1,
                              metric = "offspring"){
   
   # Extract movement speeds from the models
   SPEED <- sapply(models, function(m) {
     ci <- tryCatch(summary(m, units = FALSE)$CI, error = function(e) NULL)
-    if (is.data.frame(ci) && nrow(ci) >= 4) {
-      ci[4, 2]
-    } else {
-      Inf
-    }
-  })
+    if (is.data.frame(ci) && nrow(ci) >= 4) {ci[4, 2]} else {Inf}})
   
-  # Basal metabolic rate (in kj/day) from Nagy 1987 https://doi.org/10.2307/1942620 
-  BMR <- 0.774 + 0.727*log10(mass)
-  
-  #Back transform 
-  BMR <- 10^BMR
-  
-  # total lifespan in days (based on number of range crossings)
-  lifespan <- (1 * mass^0.25) * (round(prey.tau_p(mass))) * exp(-risk_factor * crossings)
-  
-  # Metabolic cost of movement in watts/kg from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1 
-  E = 10.7*(mass/1000)^(-0.316)*SPEED + 6.03*(mass/1000)^(-0.303)
-  
-  #Convert to kJ/s
-  E <- (E * (mass/1000))/1000
-  
-  #### Maximum running speed in km/hr from Hirt et al. 2017 https://doi.org/10.1038/s41559-017-0241-4
-  v_max <- 25.5 * (mass/1000)^(0.26) * (1 - exp(-22*(mass/1000)^(-0.66)))
-  
-  #Convert to m/s
-  v_max <- v_max/3.6
-  
-  #energy for somatic maintenance
-  maintenance_energy <- BMR * lifespan
-  
-  #energy for growth
-  growth_energy <- (1 - alpha) * mass^beta * lifespan
-  
-  #reserve energy (surplus)
-  reserve_energy <- benefits * calories - (maintenance_energy + growth_energy)
-  
-  #if the reserve energy is positive, allocate energy to reproduction
-  if (reserve_energy > 0) {
-    offspring <- floor(kap * reserve_energy / BMR) # Number of offspring based on available reserve
+  #estimation of lifespan and reproduction
+  if(DEB){
+    #define DEB parameters
+    p_Am <- 22.5
+    v <- 0.02
+    p_M <- 18
+    E_G <- 2800
+    kappa <- 0.8
+    kappa_R <- 0.95
+    
+    #estimate structural volume from mass (assuming density = 1 g/cm^3)
+    V <- mass #in g, approximated as cm^3 for simplicity
+    L <- V^(1/3)
+    
+    #energy density [E_m] and reserve [E]
+    E_m <- p_Am / v
+    E <- E_m
+    
+    #mobilisation flux
+    p_C <- (E * v)/(L+v/(1*mass^(-0.25))) # using mass-based growth rate approximation
+    
+    #reproductive energy flux
+    p_R <- (1 - kappa) * p_C
+    
+    #set the energetic cost of individual offspring 
+    # allometric scaling says offspring exp factor ranges from 0.75 to 1
+    x <- 0.75
+    E_0 <- mass_prey^0.75
+    
+    # total reproductive output over lifespan
+    lifespan <- mass^(0.25) * round(prey.tau_p(mass)) * exp(-risk_factor * crossings)
+    
+    R_total <- floor((kappa_R * p_R * lifespan) / E_0)
+    
+    offspring <- max(R_total, 0)
+    
+    # If predator encounters are being considered,
+    # individuals that encountered a predator are killed and don't reproduce.
+    if(!is.null(costs)){
+      offspring[costs] <- 0
+      }
+    
+    offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #Clamp the minimum to 0
+    
   } else {
-    offspring <- 0
+    # Basal metabolic rate (in kj/day) from Nagy 1987 https://doi.org/10.2307/1942620 
+    BMR <- 0.774 + 0.727*log10(mass)
+    
+    #Back transform 
+    BMR <- 10^BMR
+    
+    # total lifespan in days (based on number of range crossings)
+    lifespan <- round(prey.tau_p(mass)*crossings) /60/60/24
+    
+    # Metabolic cost of movement in watts/kg from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1 
+    E = 10.7*(mass/1000)^(-0.316)*SPEED + 6.03*(mass/1000)^(-0.303)
+    
+    #Convert to kJ/s
+    E <- (E * (mass/1000))/1000
+    
+    #### Maximum running speed in km/hr from Hirt et al. 2017 https://doi.org/10.1038/s41559-017-0241-4
+    v_max <- 25.5 * (mass/1000)^(0.26) * (1 - exp(-22*(mass/1000)^(-0.66)))
+    
+    #Convert to m/s
+    v_max <- v_max/3.6
+    
+    #Total energetic cost in kj as a function of BMR and movement speed
+    COST <- BMR * lifespan + E*prey.tau_p(mass)*crossings*constant
+    
+    # Excess energy
+    excess <- benefits*calories - COST
+    excess[is.infinite(excess)] <- NA
+    
+    # Define number of prey offspring based on their excess energy and metabolic rate
+    offspring <- floor(excess/BMR)
+    offspring[is.na(offspring)] <- 0
+    offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #Clamp the minimum to 0
+    
+    # If predator encounters are being considered,
+    # individuals that encountered a predator are killed and don't reproduce.
+    if(!is.null(costs)){offspring[costs] <- 0}
+    offspring
   }
-  
-  #if predator encounters are being considered, individuals that encountered a predator are killed and don't reproduce
-  if (!is.null(costs)) {
-    offspring[costs] <- 0
-  }
-  
-  #clamp offspring
-  offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #Clamp the minimum to 0
-  
-  #return
-  if(metric == "lifespan"){return(lifespan)}
-  else if (metric == "offspring"){return(offspring)} else {
-    stop("Invalid metric. Use 'lifespan' or 'offspring'.")}
+  if(metric == "offspring"){return(offspring)}
+  if(metric == "lifespan"){return(lifespan)
+    stop("Invalid metric. Use 'offspring' or 'lifespan'.")}
 }
-
+  
+  
 #----------------------------------------------------------------------
 # Identify Encounter Events
 #----------------------------------------------------------------------
