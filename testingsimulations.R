@@ -12,7 +12,6 @@ set.seed(1)
 library(extraDistr)
 library(ctmm)
 library(terra)
-library(deSolve)
 
 # Source the functions (ensure 'functions.R' is available in the working directory)
 source("functions.R")
@@ -26,7 +25,6 @@ mass_pred <- 5000
 
 # Prey mass (g)
 mass_prey <- 1000
-
 
 #----------------------------------------------------------------------
 # testing prey.mod function
@@ -221,19 +219,19 @@ print(prey_offspring.deb)
 #----------------------------------------------------------------------
 
 #set sampling interval and lifespan
-t <- sampling2.0(mass_prey, crossings = 20, risk_factor = 0)
+t <- seq(0,1 %#% 'month', 1 %#% 'hr')
 
 #energetic value of a patch
 CALS <- ((10^(0.774 + 0.727*log10(mass_prey)))^1.22)/150
 
 #number of individuals in arena
-n_prey <- 10
+n_prey <- 20
 
 #number of arenas
 REPS <- 20
 
 #number of generations
-GENS <- 10
+GENS <- 50
 
 #build food raster
 FOOD <- patches(mass_prey, width = 20, pred = FALSE, type = "uniform")
@@ -300,13 +298,22 @@ for(G in 1:GENS) {
     for(i in 1:n_prey){
       benefits_prey[i] <- grazing(PREY_tracks[[i]], FOOD)
     }
-    offspring_prey <- prey.fitness.deb(benefits = benefits_prey,
-                                       mass_prey,
-                                       costs = 0,
-                                       models = PREY_mods,
-                                       crossings = 20,
-                                       calories = CALS,
-                                       DEB = TRUE)
+    
+    f <- vector()
+    for(i in 1:n_prey){
+      f[i] <- calculate_f(benefits_prey)
+    }
+    
+    offspring_prey <- prey.fitness.debkiss(mass = mass_prey,
+                                           f = f,
+                                           costs = 0,
+                                           crossings = 20,
+                                           calories = 10,
+                                           risk_factor = 0,
+                                           DEBkiss = TRUE,
+                                           constant = 1,
+                                           models = PREY_mods,
+                                           metric = "offspring")
     
     #get values
     prey_lvs <- vector()
@@ -384,7 +391,9 @@ track_df <- do.call(rbind, lapply(1:length(PREY_tracks), function(i) {
              id = as.factor(i))
 }))
 
-ggplot(track_df, aes(x = x, y = y, group = id, color = id)) +
+id <- subset(track_df, id == 3)
+
+ggplot(id, aes(x = x, y = y, group = id, color = id)) +
   geom_path() +
   theme_minimal() +
   labs(title = "Prey Movement Tracks", x = "X", y = "Y") +

@@ -358,18 +358,30 @@ prey.fitness <- function(benefits, mass, costs = NULL, models, crossings = 20, c
 }
 
 #----------------------------------------------------------------------
+# convert number of patches visited into scaled functional response f
+#----------------------------------------------------------------------
+
+calculate_f <- function(benefits, f_max = 1, saturation  = 10) {
+  #simple saturation curve
+  f <- f_max * benefits / (saturation + benefits)
+  return(min(f, f_max)) #ensure f does not exceed 1
+}
+
+#----------------------------------------------------------------------
 # Prey fitness function 2.0
 #----------------------------------------------------------------------
 
-prey.fitness.deb <- function(benefits, 
-                             mass, 
+#calculate fitness 
+prey.fitness.debkiss <- function(mass, 
+                             f,
                              costs = NULL, 
                              models, 
                              crossings = 20, 
                              calories = 10, 
                              risk_factor = 0,
-                             DEB = FALSE,
+                             DEBkiss = FALSE,
                              constant = 1,
+                             kappa = 0.8,
                              metric = "offspring"){
   
   # Extract movement speeds from the models
@@ -378,42 +390,35 @@ prey.fitness.deb <- function(benefits,
     if (is.data.frame(ci) && nrow(ci) >= 4) {ci[4, 2]} else {Inf}})
   
   #estimation of lifespan and reproduction
-  if(DEB){
-    #define DEB parameters
-    p_Am <- 22.5 #maximum assimilation rate (J/cm^2 day)
-    v <- 0.02 # energy conductance (cm/day)
-    p_M <- 18 # maintenance cost (vol-spec, cm^-3 day^-1)
-    E_G <- 2800 #energy density (J/g)
-    kappa <- 0.8 # efficiency of energy storage (no units)
-    kappa_R <- 0.95 # fraction of energy allocated to reproduction (no units)
+  if(DEBkiss){
+  
+    #DEBkiss model: Jager T (2024). DEBkiss. A simple framework for animal energy budgets. Version 3.1. Leanpub: https://leanpub.com/debkiss_book.
+    #structural length from mass
+    L <- (mass / 0.2)^(1/3)
     
-    #estimate structural volume from mass (assuming density = 1 g/cm^3)
-    V <- mass #in g, approximated as cm^3 for simplicity
-    L <- V^(1/3)
+    #assimilation (scaled with surface area ~ L^2)
+    JaAm <- 0.2 * (mass / 1100)^(2/3)
+    JA <- f * JaAm * L^2 #g/day
     
-    #energy density [E_m] and reserve [E]
-    E_m <- p_Am / v
-    E <- E_m
+    #maintenance (scaled with volume ~ mass)
+    JvM <- 0.02 * (mass / 1100)^0 #constant
+    JM <- JvM * mass
     
-    #mobilisation flux
-    p_C <- (E * v)/(L+v/(1*mass^(-0.25))) # using mass-based growth rate approximation
+    #mobilisation from reserve buffer
+    JB <- (JA - JM) / (1 + kappa / 0.8) #g/day
     
-    #reproductive energy flux
-    p_R <- (1 - kappa) * p_C
+    #allocation 
+    JB_soma <- kappa * JB
+    JB_gametes <- (1 - kappa) * JB
     
-    #set the energetic cost of individual offspring 
-    # allometric scaling says offspring exp factor ranges from 0.75 to 1
-    x <- 0.75
-    E_0 <- mass_prey^0.75
+    #reproduction
+    JR <- JB_gametes * 0.95 
     
-    # total reproductive output over lifespan
-    lifespan <- mass^(0.25) * round(prey.tau_p(mass)) * exp(-risk_factor * crossings)
+    #lifespan estimation
+    lifespan <- round(prey.tau_p(mass) * crossings) / 60 / 60 / 24
     
-    #total reproductive output over lifespan
-    R_total <- floor((kappa_R * p_R * lifespan) / E_0)
-    
-    #ensure number of offspring is non negative
-    offspring <- max(R_total, 0)
+    #total offspring
+    offspring <- JR * lifespan
     
     # If predator encounters are being considered,
     # individuals that encountered a predator are killed and don't reproduce.
