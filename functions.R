@@ -373,16 +373,21 @@ calculate_f <- function(benefits, f_max = 1, saturation  = 10) {
 
 #calculate fitness 
 prey.fitness.debkiss <- function(mass, 
-                             f,
-                             costs = NULL, 
-                             models, 
-                             crossings = 20, 
-                             calories = 10, 
-                             risk_factor = 0,
-                             DEBkiss = FALSE,
-                             constant = 1,
-                             kappa = 0.8,
-                             metric = "offspring"){
+                                 f,
+                                 costs = NULL, 
+                                 models, 
+                                 DEBkiss = FALSE,
+                                 crossings = 20, 
+                                 calories = 10, 
+                                 constant = 1,
+                                 kappa = 0.8,
+                                 JaAm_ref = 0.24, #g/cm^2d
+                                 mass_ref = 671.8, #g, from Lariviere (1999) 
+                                 dV = 0.2, #mg/mm^3
+                                 JvM_ref = 0.02, #g/cm^3d
+                                 yBA = 0.95, #mg
+                                 yVA = 0.8, #mg
+                                 metric = "offspring"){
   
   # Extract movement speeds from the models
   SPEED <- sapply(models, function(m) {
@@ -391,28 +396,30 @@ prey.fitness.debkiss <- function(mass,
   
   #estimation of lifespan and reproduction
   if(DEBkiss){
-  
+    
     #DEBkiss model: Jager T (2024). DEBkiss. A simple framework for animal energy budgets. Version 3.1. Leanpub: https://leanpub.com/debkiss_book.
+    #ref values are from Desforges et al. (2017)
+    
     #structural length from mass
     L <- (mass / 0.2)^(1/3)
     
     #assimilation (scaled with surface area ~ L^2)
-    JaAm <- 0.2 * (mass / 1100)^(2/3)
+    JaAm <- JaAM_ref * (mass / mass_ref)^(2/3)
     JA <- f * JaAm * L^2 #g/day
     
     #maintenance (scaled with volume ~ mass)
-    JvM <- 0.02 * (mass / 1100)^0 #constant
+    JvM <- JvM_ref * (mass / mass_ref)^0 #constant
     JM <- JvM * mass
     
     #mobilisation from reserve buffer
-    JB <- (JA - JM) / (1 + kappa / 0.8) #g/day
+    JB <- (JA - JM) / (1 + kappa / yVA) #g/day
     
     #allocation 
     JB_soma <- kappa * JB
     JB_gametes <- (1 - kappa) * JB
     
     #reproduction
-    JR <- JB_gametes * 0.95 
+    JR <- JB_gametes * yBA 
     
     #lifespan estimation
     lifespan <- round(prey.tau_p(mass) * crossings) / 60 / 60 / 24
@@ -424,7 +431,7 @@ prey.fitness.debkiss <- function(mass,
     # individuals that encountered a predator are killed and don't reproduce.
     if(!is.null(costs)){
       offspring[costs] <- 0
-      }
+    }
     
     offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #Clamp the minimum to 0
     
@@ -471,7 +478,6 @@ prey.fitness.debkiss <- function(mass,
   if(metric == "lifespan"){return(lifespan)
     stop("Invalid metric. Use 'offspring' or 'lifespan'.")}
 }
-  
   
 #----------------------------------------------------------------------
 # Identify Encounter Events
