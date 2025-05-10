@@ -375,13 +375,13 @@ calculate_f <- function(benefits, f_max = 1, saturation  = 10) {
 prey.fitness.debkiss <- function(mass, 
                                  f,
                                  costs = NULL, 
-                                 models, 
+                                 models,
                                  DEBkiss = FALSE,
                                  crossings = 20, 
                                  calories = 10, 
                                  constant = 1,
                                  kappa = 0.8,
-                                 JaAm_ref = 0.24, #g/cm^2d
+                                 JaAM_ref = 0.24, #g/cm^2d
                                  mass_ref = 671.8, #g, from Lariviere (1999) 
                                  dV = 0.2, #mg/mm^3
                                  JvM_ref = 0.02, #g/cm^3d
@@ -400,8 +400,22 @@ prey.fitness.debkiss <- function(mass,
     #DEBkiss model: Jager T (2024). DEBkiss. A simple framework for animal energy budgets. Version 3.1. Leanpub: https://leanpub.com/debkiss_book.
     #ref values are from Desforges et al. (2017)
     
-    #structural length from mass
-    L <- (mass / 0.2)^(1/3)
+    #structural length L from mass 
+    #L^3 = Wv/dv, volumetric structural length
+    L <- (mass / dV)^(1/3)
+    
+    #initial conditions
+    #reproductive buffer, can use litter mass as a proxy, therefore
+    # m_litter ~ kM^b, with k $\approx$ 0.2 (mammals) and b $\approx$ 0.8-1.0
+    WR <- 0.2 * mass^1.0 
+    Wv <- mass - WR
+    
+    #birth weight via allometric scaling in mammals (Blueweiss et al. 1978)
+    #wet weight $\approx 0.75$ total weight, therefore dry mass $\approx 0.25$ (Fusch et al. 1999)
+    WB0 <- 0.25*(0.097 * mass^(0.92))
+    
+    #puberty threshold (Falconer 1984)
+    WvP <- 0.45 * mass 
     
     #assimilation (scaled with surface area ~ L^2)
     JaAm <- JaAM_ref * (mass / mass_ref)^(2/3)
@@ -409,23 +423,45 @@ prey.fitness.debkiss <- function(mass,
     
     #maintenance (scaled with volume ~ mass)
     JvM <- JvM_ref * (mass / mass_ref)^0 #constant
-    JM <- JvM * mass
-    
-    #mobilisation from reserve buffer
-    JB <- (JA - JM) / (1 + kappa / yVA) #g/day
-    
-    #allocation 
-    JB_soma <- kappa * JB
-    JB_gametes <- (1 - kappa) * JB
-    
-    #reproduction
-    JR <- JB_gametes * yBA 
+    JM <- JvM * L^3 
+    JV <- yVA*(kappa*JA - JM) #structural growth flux
     
     #lifespan estimation
     lifespan <- round(prey.tau_p(mass) * crossings) / 60 / 60 / 24
     
-    #total offspring
-    offspring <- JR * lifespan
+    #initialize
+    dt <- round(prey.tau_v(mass)) / 60 / 60 / 24 #convert seconds to days
+    
+    #initial offspring
+    offspring <- 0
+    
+    for(i in 1:n_prey){
+      #check if Wv[i] or WvP[i] is NA
+      if(is.na(Wv[i]) | is.na(WvP[i])) {
+        next #skip this iteration if there's an NA value
+    }
+      #reproductive buffer flux JR
+      if(Wv[i] > WvP[i]){
+        JR <- (1 - kappa) * JA
+      } else {
+        JR <- 0
+      }
+      WR[i] <- WR[i] + JR[i] * dt
+    }
+      
+      #offspring production
+      for(i in 1:n_prey){
+        #check if Wv[i] or WvP[i] is NA
+        if(is.na(WR[i]) | is.na(WB0[i])) {
+          next #skip this iteration if there's an NA value
+      }
+      if(yBA * WR[i] >= WB0[i]){
+        delta_R <- floor((yBA * WR[i]) / WB0[i])
+        offspring <- offspring + delta_R
+        WR[i] <- WR[i] - (delta_R * WB0[i]) / yBA
+      }
+      Wv <- Wv + JV * dt
+    }
     
     # If predator encounters are being considered,
     # individuals that encountered a predator are killed and don't reproduce.

@@ -3,8 +3,7 @@
 #----------------------------------------------------------------------
 
 # Set the working directory
-setwd("C:/Users/lterp/Desktop/OneDrive - UBC/_URAproject/ballistic_movement_models/ballistic_movement_models")
-
+setwd("~/ballistic_movement_models")
 # Set the random seed
 set.seed(1)
 
@@ -228,10 +227,10 @@ CALS <- ((10^(0.774 + 0.727*log10(mass_prey)))^1.22)/150
 n_prey <- 20
 
 #number of arenas
-REPS <- 20
+REPS <- 50
 
 #number of generations
-GENS <- 50
+GENS <- 100
 
 #build food raster
 FOOD <- patches(mass_prey, width = 20, pred = FALSE, type = "uniform")
@@ -309,9 +308,7 @@ for(G in 1:GENS) {
                                            costs = 0,
                                            crossings = 20,
                                            calories = 10,
-                                           risk_factor = 0,
                                            DEBkiss = TRUE,
-                                           constant = 1,
                                            models = PREY_mods,
                                            metric = "offspring")
     
@@ -381,6 +378,7 @@ plot(res_df$generation, res_df$rel_change_lv, type = "b", pch = 19,
      xlab = "gen", ylab = "rel change in lv")
 abline(h = 1, lty = 2, col = "gray")
 
+
 library(ggplot2)
 
 # Flatten list of tracks into data frame
@@ -399,5 +397,46 @@ ggplot(id, aes(x = x, y = y, group = id, color = id)) +
   labs(title = "Prey Movement Tracks", x = "X", y = "Y") +
   theme(legend.position = "none")
 
+res_df <- do.call(rbind, lapply(seq_along(prey_res), function(i){
+  df <- prey_res[[i]]
+  df$sim <- i
+  df
+}))
+
+library(dplyr)
+
+summary_df <- res_df %>%
+  group_by(generation) %>%
+  summarize(
+    lv_mean = mean(lv),
+    lv_sd = sd(lv),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    lv_se = lv_sd / sqrt(n_prey),
+    lv_ci95 = 1.96 * lv_se,
+    rel_change_lv = lv_mean / lv_mean[1],
+    lower = (lv_mean - lv_sd) / lv_mean[1],
+    upper = (lv_mean + lv_sd) / lv_mean[1]
+  )
+library(ggplot2)
+
+
+library(ggplot2)
+
+ggplot(summary_df, aes(x = generation, y = rel_change_lv)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "red", alpha = 0.2) +
+  geom_line(color = "red", size = 1) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray50") +
+  labs(
+    x = "Generation",
+    y = "Relative change in lv"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line()
+  )
 
 
