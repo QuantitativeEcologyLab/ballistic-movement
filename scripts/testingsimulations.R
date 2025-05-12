@@ -3,7 +3,7 @@
 #----------------------------------------------------------------------
 
 # Set the working directory
-setwd("~/ballistic_movement_models")
+setwd("~/ballistic_movement_models/scripts")
 # Set the random seed
 set.seed(1)
 
@@ -146,93 +146,23 @@ plot(SIM3, UD = HR3)
 
 
 #----------------------------------------------------------------------
-# calculate fitness 
-#----------------------------------------------------------------------
-
-#prey movement parameters
-prey_tau_p <- prey.tau_p(mass_prey, variance = FALSE)
-prey_tau_v <- prey.tau_v(mass_prey, variance = FALSE)
-prey_sig <- prey.SIG(mass_prey)
-prey_lv <- sqrt((prey_tau_v/prey_tau_p)*prey_sig)
-
-#generate raster
-FOOD2 <- patches(mass = mass_prey, width = 20, pred = FALSE, type = "uniform")
-plot(FOOD2, main = "Resource Landscape")
-
-#generate model
-mod4 <- ctmm(tau = c(prey_tau_p, prey_tau_v),
-             mu = c(0,0),
-             sigma = prey_sig)
-
-#simulate movement
-t4 <- seq(0, 5 %#% "month", 1 %#% "hour")
-SIM4 <- simulate(mod4, t = t4)
-
-#extract raster values along path
-track_df2 <- data.frame(x = SIM4$x, y = SIM4$y)
-track_prey2 <- vect(track_df2, geom = c("x", "y"))
-res_vals2 <- extract(FOOD, track_prey2)[, 2]
-total_resources2 <- sum(res_vals2, na.rm = TRUE)
-cat("total resource encountered by prey:", total_resources, "\n")
-
-#use grazing function
-patch_visits2 <- grazing(track_df2, FOOD, metric = "patches")
-print(patch_visits2)
-time_between2 <- grazing(track_df2, FOOD, metric = "time")
-print(time_between2)
-
-#fit and visualize
-
-GUESS4 <- ctmm.guess(SIM4, interactive = FALSE)
-FIT4 <- ctmm.select(SIM4, GUESS4, cores = -1)
-
-HR4 <- akde(SIM4, FIT4)
-
-plot(SIM4, UD = HR4)
-
-#calculate fitness and lifespan
-prey_offspring <- prey.fitness.deb(benefits = patch_visits2, 
-                                   mass = mass_prey, 
-                                   costs = 0,
-                                   models = mod4,
-                                   crossings = 20,
-                                   calories = 10,
-                                   risk_factor = 0,
-                                   constant = 1,
-                                   DEB = FALSE,
-                                   metric = "offspring"
-                                   )
-print(prey_offspring)
-
-prey_offspring.deb <- prey.fitness.deb(benefits = patch_visits2, 
-                                   mass = mass_prey, 
-                                   costs = 0,
-                                   models = mod4,
-                                   crossings = 20,
-                                   calories = 10,
-                                   risk_factor = 0,
-                                   constant = 1,
-                                   DEB = TRUE)
-print(prey_offspring.deb)
-
-#----------------------------------------------------------------------
 # trying loops
 #----------------------------------------------------------------------
 
 #set sampling interval and lifespan
-t <- sampling(mass_prey, crossings = 20)
+t <- sampling2.0(mass_prey)
 
 #energetic value of a patch
 CALS <- ((10^(0.774 + 0.727*log10(mass_prey)))^1.22)/150
 
 #number of individuals in arena
-n_prey <- 10
+n_prey <- 20
 
 #number of arenas
-REPS <- 5
+REPS <- 50
 
 #number of generations
-GENS <- 10
+GENS <- 100
 
 #build food raster
 FOOD <- patches(mass_prey, width = 20, pred = FALSE, type = "uniform")

@@ -289,19 +289,30 @@ sampling <- function(mass, crossings = 20) {
 
 sampling2.0 <- function(mass, crossings = 20, risk_factor = 0) {
   
-  #baseline lifespan using allometric scaling (L ~ M^0.25)
-  base_lifespan <- 1 * mass^0.25 #adjust constant?
-
-  #adjusted lifespan with movement timescale and risk penalty (morality associated with environment)
-  adj_lifespan <- base_lifespan * (round(prey.tau_p(mass))) * exp(-risk_factor * crossings)
+  #convert mass to kg
+  mass <- mass / 1000
+  
+  #calculate BMR from Nagy 1987
+  BMR <- 0.774 + 0.727*log10(mass)
+  
+  #Back transform 
+  BMR <- 10^BMR
+  
+  #calculate lifespan from Atanasov 2006 
+  #Tls <- (Als+ * M^1.0511)/BMR, for 95 orders of mammals, including primates
+  #primates increase the value of Als+
+  lifespan <- (715800*mass^1.0511)/BMR
+  
+  #convert back to g
+  mass <- mass * 1000
   
   #sampling interval (tau_v)
   interval <- round(prey.tau_v(mass))
   
   #lifespan and sampling interval for simulations
   t <- seq(0,
-           adj_lifespan,
-           by = interval)
+           lifespan,
+           interval)
   
   #return vector of sampling times
   return(t)
@@ -427,7 +438,19 @@ prey.fitness.debkiss <- function(mass,
     JV <- yVA*(kappa*JA - JM) #structural growth flux
     
     #lifespan estimation
-    lifespan <- round(prey.tau_p(mass) * crossings) / 60 / 60 / 24
+    #convert mass to kg
+    mass <- mass / 1000
+    
+    #calculate BMR from Nagy 1987
+    BMR <- 0.774 + 0.727*log10(mass)
+    
+    #Back transform 
+    BMR <- 10^BMR
+    
+    #calculate lifespan from Atanasov 2006 
+    #Tls <- (Als+ * M^1.0511)/BMR, for 95 orders of mammals, including primates
+    #primates increase the value of Als+
+    lifespan <- (715800*mass^1.0511)/BMR
     
     #initialize
     dt <- round(prey.tau_v(mass)) / 60 / 60 / 24 #convert seconds to days
@@ -472,14 +495,21 @@ prey.fitness.debkiss <- function(mass,
     offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #Clamp the minimum to 0
     
   } else {
-    # Basal metabolic rate (in kj/day) from Nagy 1987 https://doi.org/10.2307/1942620 
+    
+    # total lifespan in days (based on number of range crossings)
+    #convert mass to kg
+    mass <- mass / 1000
+    
+    #calculate BMR from Nagy 1987
     BMR <- 0.774 + 0.727*log10(mass)
     
     #Back transform 
     BMR <- 10^BMR
     
-    # total lifespan in days (based on number of range crossings)
-    lifespan <- round(prey.tau_p(mass)*crossings) /60/60/24
+    #calculate lifespan from Atanasov 2006 
+    #Tls <- (Als+ * M^1.0511)/BMR, for 95 orders of mammals, including primates
+    #primates increase the value of Als+
+    lifespan <- (715800*mass^1.0511)/BMR
     
     # Metabolic cost of movement in watts/kg from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1 
     E = 10.7*(mass/1000)^(-0.316)*SPEED + 6.03*(mass/1000)^(-0.303)
