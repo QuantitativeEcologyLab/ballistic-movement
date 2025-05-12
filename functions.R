@@ -280,7 +280,7 @@ sampling <- function(mass, crossings = 20) {
            interval)
   
   #return the vector of sampling times
-  return(lifespan)
+  return(t)
 }
 
 #----------------------------------------------------------------------

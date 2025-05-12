@@ -11,6 +11,8 @@ set.seed(1)
 library(extraDistr)
 library(ctmm)
 library(terra)
+library(ggplot2)
+library(dplyr)
 
 # Source the functions (ensure 'functions.R' is available in the working directory)
 source("functions.R")
@@ -23,7 +25,7 @@ source("functions.R")
 mass_pred <- 5000
 
 # Prey mass (g)
-mass_prey <- 1000
+mass_prey <- prey.mass(mass_pred)
 
 #----------------------------------------------------------------------
 # testing prey.mod function
@@ -218,19 +220,19 @@ print(prey_offspring.deb)
 #----------------------------------------------------------------------
 
 #set sampling interval and lifespan
-t <- seq(0,1 %#% 'month', 1 %#% 'hr')
+t <- sampling(mass_prey, crossings = 20)
 
 #energetic value of a patch
 CALS <- ((10^(0.774 + 0.727*log10(mass_prey)))^1.22)/150
 
 #number of individuals in arena
-n_prey <- 20
+n_prey <- 10
 
 #number of arenas
-REPS <- 50
+REPS <- 5
 
 #number of generations
-GENS <- 100
+GENS <- 10
 
 #build food raster
 FOOD <- patches(mass_prey, width = 20, pred = FALSE, type = "uniform")
@@ -370,6 +372,7 @@ for(G in 1:GENS) {
 
 print(prey_res)
 
+#model change in lv over generations
 res_df <- do.call(rbind, prey_res)
 
 res_df$rel_change_lv <- res_df$lv / res_df$lv[1]
@@ -379,31 +382,12 @@ plot(res_df$generation, res_df$rel_change_lv, type = "b", pch = 19,
 abline(h = 1, lty = 2, col = "gray")
 
 
-library(ggplot2)
-
-# Flatten list of tracks into data frame
-track_df <- do.call(rbind, lapply(1:length(PREY_tracks), function(i) {
-  data.frame(x = PREY_tracks[[i]]$x,
-             y = PREY_tracks[[i]]$y,
-             t = PREY_tracks[[i]]$t,
-             id = as.factor(i))
-}))
-
-id <- subset(track_df, id == 3)
-
-ggplot(id, aes(x = x, y = y, group = id, color = id)) +
-  geom_path() +
-  theme_minimal() +
-  labs(title = "Prey Movement Tracks", x = "X", y = "Y") +
-  theme(legend.position = "none")
-
+##ggplot version
 res_df <- do.call(rbind, lapply(seq_along(prey_res), function(i){
   df <- prey_res[[i]]
   df$sim <- i
   df
 }))
-
-library(dplyr)
 
 summary_df <- res_df %>%
   group_by(generation) %>%
@@ -419,10 +403,7 @@ summary_df <- res_df %>%
     lower = (lv_mean - lv_sd) / lv_mean[1],
     upper = (lv_mean + lv_sd) / lv_mean[1]
   )
-library(ggplot2)
 
-
-library(ggplot2)
 
 ggplot(summary_df, aes(x = generation, y = rel_change_lv)) +
   geom_ribbon(aes(ymin = lower, ymax = upper), fill = "red", alpha = 0.2) +
@@ -438,5 +419,22 @@ ggplot(summary_df, aes(x = generation, y = rel_change_lv)) +
     axis.line = element_line(color = "black"),
     axis.ticks = element_line()
   )
+
+#plot the movement paths
+# Flatten list of tracks into data frame
+track_df <- do.call(rbind, lapply(1:length(PREY_tracks), function(i) {
+  data.frame(x = PREY_tracks[[i]]$x,
+             y = PREY_tracks[[i]]$y,
+             t = PREY_tracks[[i]]$t,
+             id = as.factor(i))
+}))
+
+ggplot(track_df, aes(x = x, y = y, group = id, color = id)) +
+  geom_path() +
+  theme_minimal() +
+  labs(title = "Prey Movement Tracks", x = "X", y = "Y") +
+  theme(legend.position = "none")
+
+
 
 
