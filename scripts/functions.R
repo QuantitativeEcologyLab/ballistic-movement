@@ -287,7 +287,7 @@ sampling <- function(mass, crossings = 20) {
 
 #sampling function with lifespan scaled to body mass (Lynndsay Terpsma)
 
-sampling2.0 <- function(mass, crossings = 20, risk_factor = 0) {
+sampling2.0 <- function(mass, metric = "t") {
   
   #convert mass to kg
   mass <- mass / 1000
@@ -315,7 +315,9 @@ sampling2.0 <- function(mass, crossings = 20, risk_factor = 0) {
            interval)
   
   #return vector of sampling times
-  return(t)
+  if(metric == "t"){return(t)}
+  if(metric == "lifespan"){return(lifespan)
+    stop("Invalid metric. Use 'offspring' or 'lifespan'.")}
 }
 
 
@@ -401,11 +403,6 @@ prey.fitness.debkiss <- function(mass,
                                  yVA = 0.8, #mg
                                  metric = "offspring"){
   
-  # Extract movement speeds from the models
-  SPEED <- sapply(models, function(m) {
-    ci <- tryCatch(summary(m, units = FALSE)$CI, error = function(e) NULL)
-    if (is.data.frame(ci) && nrow(ci) >= 4) {ci[4, 2]} else {Inf}})
-  
   #estimation of lifespan and reproduction
     
   #DEBkiss model: Jager T (2024). DEBkiss. A simple framework for animal energy budgets. Version 3.1. Leanpub: https://leanpub.com/debkiss_book.
@@ -436,21 +433,6 @@ prey.fitness.debkiss <- function(mass,
   JvM <- JvM_ref * (mass / mass_ref)^0 #constant
   JM <- JvM * L^3 
   JV <- yVA*(kappa*JA - JM) #structural growth flux
-  
-  #lifespan estimation
-  #convert mass to kg
-  mass <- mass / 1000
-  
-  #calculate BMR from Nagy 1987
-  BMR <- 0.774 + 0.727*log10(mass)
-  
-  #Back transform 
-  BMR <- 10^BMR
-  
-  #calculate lifespan from Atanasov 2006 
-  #Tls <- (Als+ * M^1.0511)/BMR, for 95 orders of mammals, including primates
-  #primates increase the value of Als+
-  lifespan <- (715800*mass^1.0511)/BMR
   
   #initialize
   dt <- round(prey.tau_v(mass)) / 60 / 60 / 24 #convert seconds to days
@@ -495,9 +477,7 @@ prey.fitness.debkiss <- function(mass,
   offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #Clamp the minimum to 0
   
   
-  if(metric == "offspring"){return(offspring)}
-  if(metric == "lifespan"){return(lifespan)
-    stop("Invalid metric. Use 'offspring' or 'lifespan'.")}
+  return(offspring)
 }
   
 #----------------------------------------------------------------------
