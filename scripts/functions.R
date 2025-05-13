@@ -408,15 +408,21 @@ prey.fitness.debkiss <- function(mass,
   #DEBkiss model: Jager T (2024). DEBkiss. A simple framework for animal energy budgets. Version 3.1. Leanpub: https://leanpub.com/debkiss_book.
   #ref values are from Desforges et al. (2017) https://doi.org/10.1038/srep46267
   
+  # Standardize mass and functional response input
+  if (length(mass) == 1) mass <- rep(mass, n_prey)
+  if (length(f) == 1) f <- rep(f, n_prey)
+  
+  #initialize individual states
   #structural length L from mass 
   #L^3 = Wv/dv, volumetric structural length
   L <- (mass / dV)^(1/3)
   
-  #initial conditions
   #reproductive buffer, can use litter mass as a proxy, therefore
-  # m_litter ~ kM^b, with k $\approx$ 0.2 (mammals) and b $\approx$ 0.8-1.0
+  #m_litter ~ kM^b, with k $\approx$ 0.2 (mammals) and b $\approx$ 0.8-1.0
+  #source?
   WR <- 0.2 * mass^1.0 
-  Wv <- mass - WR
+  Wv_initial <- mass - WR #proxy
+  Wv <- Wv_initial
   
   #birth weight via allometric scaling in mammals (Blueweiss et al. 1978)
   #wet weight $\approx 0.75$ total weight, therefore dry mass $\approx 0.25$ (Fusch et al. 1999)
@@ -430,7 +436,7 @@ prey.fitness.debkiss <- function(mass,
   JA <- f * JaAm * L^2 #g/day
   
   #maintenance (scaled with volume ~ mass)
-  JvM <- JvM_ref * (mass / mass_ref)^0 #constant
+  JvM <- rep(JvM_ref, n_prey) #constant
   JM <- JvM * L^3 
   JV <- yVA*(kappa*JA - JM) #structural growth flux
   
@@ -438,35 +444,30 @@ prey.fitness.debkiss <- function(mass,
   dt <- round(prey.tau_v(mass)) / 60 / 60 / 24 #convert seconds to days
   
   #initial offspring
-  offspring <- 0
+  offspring <- numeric(n_prey)
   
+  #loop over individuals
   for(i in 1:n_prey){
-    #check if Wv[i] or WvP[i] is NA
-    if(is.na(Wv[i]) | is.na(WvP[i])) {
-      next #skip this iteration if there's an NA value
-  }
-    #reproductive buffer flux JR
-    if(Wv[i] > WvP[i]){
-      JR <- (1 - kappa) * JA
+   #update structural mass
+    Wv[i] <- Wv[i] + JV[i] *dt[i]
+    
+    #reproductive flux (ppost-pubertty)
+    JR <- if(Wv[i] > WvP[i]) {
+      (1 - kappa) * JA[i]
     } else {
-      JR <- 0
+      0
     }
-    WR[i] <- WR[i] + JR[i] * dt
-  }
+    
+    #update reproductive buffer'
+    WR[i] <- WR[i] + JR * dt[i]
     
     #offspring production
-    for(i in 1:n_prey){
-      #check if Wv[i] or WvP[i] is NA
-      if(is.na(WR[i]) | is.na(WB0[i])) {
-        next #skip this iteration if there's an NA value
+    if(yBA * WR[i] >= WB0[i]) {
+      delta_R <- floor((yBAA*WR[i])/WB0[i])
+      offspring[i] <- delta_R
+      WR[i] <- WR[i] - (delta_R * WB0[i])/yBA
     }
-    if(yBA * WR[i] >= WB0[i]){
-      delta_R <- floor((yBA * WR[i]) / WB0[i])
-      offspring <- offspring + delta_R
-      WR[i] <- WR[i] - (delta_R * WB0[i]) / yBA
-    }
-    Wv <- Wv + JV * dt
-  }
+  } #closes individuals loop
   
   # If predator encounters are being considered,
   # individuals that encountered a predator are killed and don't reproduce.
@@ -474,8 +475,8 @@ prey.fitness.debkiss <- function(mass,
     offspring[costs] <- 0
   }
   
+  #clamp  minimum offspring to 0
   offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #Clamp the minimum to 0
-  
   
   return(offspring)
 }
