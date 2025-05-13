@@ -389,7 +389,6 @@ prey.fitness.debkiss <- function(mass,
                                  f,
                                  costs = NULL, 
                                  models,
-                                 DEBkiss = FALSE,
                                  crossings = 20, 
                                  calories = 10, 
                                  constant = 1,
@@ -408,140 +407,94 @@ prey.fitness.debkiss <- function(mass,
     if (is.data.frame(ci) && nrow(ci) >= 4) {ci[4, 2]} else {Inf}})
   
   #estimation of lifespan and reproduction
-  if(DEBkiss){
     
-    #DEBkiss model: Jager T (2024). DEBkiss. A simple framework for animal energy budgets. Version 3.1. Leanpub: https://leanpub.com/debkiss_book.
-    #ref values are from Desforges et al. (2017) https://doi.org/10.1038/srep46267
+  #DEBkiss model: Jager T (2024). DEBkiss. A simple framework for animal energy budgets. Version 3.1. Leanpub: https://leanpub.com/debkiss_book.
+  #ref values are from Desforges et al. (2017) https://doi.org/10.1038/srep46267
+  
+  #structural length L from mass 
+  #L^3 = Wv/dv, volumetric structural length
+  L <- (mass / dV)^(1/3)
+  
+  #initial conditions
+  #reproductive buffer, can use litter mass as a proxy, therefore
+  # m_litter ~ kM^b, with k $\approx$ 0.2 (mammals) and b $\approx$ 0.8-1.0
+  WR <- 0.2 * mass^1.0 
+  Wv <- mass - WR
+  
+  #birth weight via allometric scaling in mammals (Blueweiss et al. 1978)
+  #wet weight $\approx 0.75$ total weight, therefore dry mass $\approx 0.25$ (Fusch et al. 1999)
+  WB0 <- 0.25*(0.097 * mass^(0.92))
+  
+  #puberty threshold (Falconer 1984)
+  WvP <- 0.45 * mass 
+  
+  #assimilation (scaled with surface area ~ L^2)
+  JaAm <- JaAM_ref * (mass / mass_ref)^(2/3)
+  JA <- f * JaAm * L^2 #g/day
+  
+  #maintenance (scaled with volume ~ mass)
+  JvM <- JvM_ref * (mass / mass_ref)^0 #constant
+  JM <- JvM * L^3 
+  JV <- yVA*(kappa*JA - JM) #structural growth flux
+  
+  #lifespan estimation
+  #convert mass to kg
+  mass <- mass / 1000
+  
+  #calculate BMR from Nagy 1987
+  BMR <- 0.774 + 0.727*log10(mass)
+  
+  #Back transform 
+  BMR <- 10^BMR
+  
+  #calculate lifespan from Atanasov 2006 
+  #Tls <- (Als+ * M^1.0511)/BMR, for 95 orders of mammals, including primates
+  #primates increase the value of Als+
+  lifespan <- (715800*mass^1.0511)/BMR
+  
+  #initialize
+  dt <- round(prey.tau_v(mass)) / 60 / 60 / 24 #convert seconds to days
+  
+  #initial offspring
+  offspring <- 0
+  
+  for(i in 1:n_prey){
+    #check if Wv[i] or WvP[i] is NA
+    if(is.na(Wv[i]) | is.na(WvP[i])) {
+      next #skip this iteration if there's an NA value
+  }
+    #reproductive buffer flux JR
+    if(Wv[i] > WvP[i]){
+      JR <- (1 - kappa) * JA
+    } else {
+      JR <- 0
+    }
+    WR[i] <- WR[i] + JR[i] * dt
+  }
     
-    #structural length L from mass 
-    #L^3 = Wv/dv, volumetric structural length
-    L <- (mass / dV)^(1/3)
-    
-    #initial conditions
-    #reproductive buffer, can use litter mass as a proxy, therefore
-    # m_litter ~ kM^b, with k $\approx$ 0.2 (mammals) and b $\approx$ 0.8-1.0
-    WR <- 0.2 * mass^1.0 
-    Wv <- mass - WR
-    
-    #birth weight via allometric scaling in mammals (Blueweiss et al. 1978)
-    #wet weight $\approx 0.75$ total weight, therefore dry mass $\approx 0.25$ (Fusch et al. 1999)
-    WB0 <- 0.25*(0.097 * mass^(0.92))
-    
-    #puberty threshold (Falconer 1984)
-    WvP <- 0.45 * mass 
-    
-    #assimilation (scaled with surface area ~ L^2)
-    JaAm <- JaAM_ref * (mass / mass_ref)^(2/3)
-    JA <- f * JaAm * L^2 #g/day
-    
-    #maintenance (scaled with volume ~ mass)
-    JvM <- JvM_ref * (mass / mass_ref)^0 #constant
-    JM <- JvM * L^3 
-    JV <- yVA*(kappa*JA - JM) #structural growth flux
-    
-    #lifespan estimation
-    #convert mass to kg
-    mass <- mass / 1000
-    
-    #calculate BMR from Nagy 1987
-    BMR <- 0.774 + 0.727*log10(mass)
-    
-    #Back transform 
-    BMR <- 10^BMR
-    
-    #calculate lifespan from Atanasov 2006 
-    #Tls <- (Als+ * M^1.0511)/BMR, for 95 orders of mammals, including primates
-    #primates increase the value of Als+
-    lifespan <- (715800*mass^1.0511)/BMR
-    
-    #initialize
-    dt <- round(prey.tau_v(mass)) / 60 / 60 / 24 #convert seconds to days
-    
-    #initial offspring
-    offspring <- 0
-    
+    #offspring production
     for(i in 1:n_prey){
       #check if Wv[i] or WvP[i] is NA
-      if(is.na(Wv[i]) | is.na(WvP[i])) {
+      if(is.na(WR[i]) | is.na(WB0[i])) {
         next #skip this iteration if there's an NA value
     }
-      #reproductive buffer flux JR
-      if(Wv[i] > WvP[i]){
-        JR <- (1 - kappa) * JA
-      } else {
-        JR <- 0
-      }
-      WR[i] <- WR[i] + JR[i] * dt
+    if(yBA * WR[i] >= WB0[i]){
+      delta_R <- floor((yBA * WR[i]) / WB0[i])
+      offspring <- offspring + delta_R
+      WR[i] <- WR[i] - (delta_R * WB0[i]) / yBA
     }
-      
-      #offspring production
-      for(i in 1:n_prey){
-        #check if Wv[i] or WvP[i] is NA
-        if(is.na(WR[i]) | is.na(WB0[i])) {
-          next #skip this iteration if there's an NA value
-      }
-      if(yBA * WR[i] >= WB0[i]){
-        delta_R <- floor((yBA * WR[i]) / WB0[i])
-        offspring <- offspring + delta_R
-        WR[i] <- WR[i] - (delta_R * WB0[i]) / yBA
-      }
-      Wv <- Wv + JV * dt
-    }
-    
-    # If predator encounters are being considered,
-    # individuals that encountered a predator are killed and don't reproduce.
-    if(!is.null(costs)){
-      offspring[costs] <- 0
-    }
-    
-    offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #Clamp the minimum to 0
-    
-  } else {
-    
-    # total lifespan in days (based on number of range crossings)
-    #convert mass to kg
-    mass <- mass / 1000
-    
-    #calculate BMR from Nagy 1987
-    BMR <- 0.774 + 0.727*log10(mass)
-    
-    #Back transform 
-    BMR <- 10^BMR
-    
-    #calculate lifespan from Atanasov 2006 
-    #Tls <- (Als+ * M^1.0511)/BMR, for 95 orders of mammals, including primates
-    #primates increase the value of Als+
-    lifespan <- (715800*mass^1.0511)/BMR
-    
-    # Metabolic cost of movement in watts/kg from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1 
-    E = 10.7*(mass/1000)^(-0.316)*SPEED + 6.03*(mass/1000)^(-0.303)
-    
-    #Convert to kJ/s
-    E <- (E * (mass/1000))/1000
-    
-    #### Maximum running speed in km/hr from Hirt et al. 2017 https://doi.org/10.1038/s41559-017-0241-4
-    v_max <- 25.5 * (mass/1000)^(0.26) * (1 - exp(-22*(mass/1000)^(-0.66)))
-    
-    #Convert to m/s
-    v_max <- v_max/3.6
-    
-    #Total energetic cost in kj as a function of BMR and movement speed
-    COST <- BMR * lifespan + E*prey.tau_p(mass)*crossings*constant
-    
-    # Excess energy
-    excess <- benefits*calories - COST
-    excess[is.infinite(excess)] <- NA
-    
-    # Define number of prey offspring based on their excess energy and metabolic rate
-    offspring <- floor(excess/BMR)
-    offspring[is.na(offspring)] <- 0
-    offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #Clamp the minimum to 0
-    
-    # If predator encounters are being considered,
-    # individuals that encountered a predator are killed and don't reproduce.
-    if(!is.null(costs)){offspring[costs] <- 0}
-    offspring
+    Wv <- Wv + JV * dt
   }
+  
+  # If predator encounters are being considered,
+  # individuals that encountered a predator are killed and don't reproduce.
+  if(!is.null(costs)){
+    offspring[costs] <- 0
+  }
+  
+  offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #Clamp the minimum to 0
+  
+  
   if(metric == "offspring"){return(offspring)}
   if(metric == "lifespan"){return(lifespan)
     stop("Invalid metric. Use 'offspring' or 'lifespan'.")}
