@@ -150,16 +150,16 @@ plot(SIM3, UD = HR3)
 #----------------------------------------------------------------------
 
 #set sampling interval and lifespan
-t <- sampling2.0(mass_prey)
+t <- seq(0,1 %#% 'month', 1 %#% 'hr')
 
 #energetic value of a patch
 CALS <- ((10^(0.774 + 0.727*log10(mass_prey)))^1.22)/150
 
 #number of individuals in arena
-n_prey <- 20
+n_prey <- 10
 
 #number of arenas
-REPS <- 50
+REPS <- 20
 
 #number of generations
 GENS <- 100

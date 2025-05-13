@@ -199,21 +199,17 @@ patches <- function(mass, width = 20, pred = FALSE,
   type <- match.arg(type)
   
   # var[position]
-  
   if(pred){SIG <- pred.SIG(mass)} else{
     SIG <- prey.SIG(mass)}
   
   # Range of raster based on 99.9% HR area
-  
   EXT <- round(sqrt((-2*log(0.0001)*pi)* SIG))
   
   #number of patches based on fixed patch width
   #N <- EXT/n
-  
   N <- EXT / width
   
   #Build the raster
-  
   FOOD <- rast(ncol = N, nrow = N, 
                xmin = -EXT, xmax = EXT, 
                ymin = -EXT, ymax = EXT)
@@ -235,7 +231,7 @@ patches <- function(mass, width = 20, pred = FALSE,
 
 grazing <- function(track, habitat, metric = "patches") {
   
-  #ensure input is a data fram with x and y columns
+  #ensure input is a data frame with x and y columns
   if (!all(c("x", "y") %in% colnames(track))) {
     stop("Track must have 'x' and 'y' columns.")
   }
@@ -266,6 +262,8 @@ grazing <- function(track, habitat, metric = "patches") {
 # Determine "Lifespan" and sampling interval based on mass_prey (g)
 #----------------------------------------------------------------------
 
+#original sampling function by Dr. Michael Noonan
+
 sampling <- function(mass, crossings = 20) {
   
   # total lifespan (based on number of range crossings)
@@ -287,18 +285,20 @@ sampling <- function(mass, crossings = 20) {
 # trying something new for "lifespan" and sampling interval
 #----------------------------------------------------------------------
 
+#sampling function with lifespan scaled to body mass (Lynndsay Terpsma)
+
 sampling2.0 <- function(mass, crossings = 20, risk_factor = 0) {
   
   #convert mass to kg
   mass <- mass / 1000
   
-  #calculate BMR from Nagy 1987
+  #calculate BMR from Nagy 1987 https://doi.org/10.2307/1942620 
   BMR <- 0.774 + 0.727*log10(mass)
   
   #Back transform 
   BMR <- 10^BMR
   
-  #calculate lifespan from Atanasov 2006 
+  #calculate lifespan from Atanasov 2006 https://doi.org/10.1016/j.biosystems.2006.08.006
   #Tls <- (Als+ * M^1.0511)/BMR, for 95 orders of mammals, including primates
   #primates increase the value of Als+
   lifespan <- (715800*mass^1.0511)/BMR
@@ -322,6 +322,8 @@ sampling2.0 <- function(mass, crossings = 20, risk_factor = 0) {
 #----------------------------------------------------------------------
 # Prey fitness function
 #----------------------------------------------------------------------
+
+#original prey fitness function by Dr. Michael Noonan
 
 prey.fitness <- function(benefits, mass, costs = NULL, models, crossings = 20, calories = 10, constant = 1){
   
@@ -409,7 +411,7 @@ prey.fitness.debkiss <- function(mass,
   if(DEBkiss){
     
     #DEBkiss model: Jager T (2024). DEBkiss. A simple framework for animal energy budgets. Version 3.1. Leanpub: https://leanpub.com/debkiss_book.
-    #ref values are from Desforges et al. (2017)
+    #ref values are from Desforges et al. (2017) https://doi.org/10.1038/srep46267
     
     #structural length L from mass 
     #L^3 = Wv/dv, volumetric structural length
