@@ -231,18 +231,9 @@ patches <- function(mass, width = 20, pred = FALSE,
 
 grazing <- function(track, habitat, metric = "patches") {
   
-  #ensure input is a data frame with x and y columns
-  if (!all(c("x", "y") %in% colnames(track))) {
-    stop("Track must have 'x' and 'y' columns.")
-  }
-  
-  #convert track to matrix for terra:cellFromXY
-  coords <- as.matrix(track[, c("x", "y")])
-  
-  #ensure habitat is spatraster
-  if(inherits(habitat, "RasterLayer")) {
-    habitat <- terra::rast(habitat)
-  }
+  #convert track to data frame
+  coords <- data.frame(x = track$x, y = track$y)
+  coords <- vect(track, geom = c("x", "y"))
   
   #Patch identities
   IDs <- cellFromXY(habitat, coords)
@@ -264,9 +255,9 @@ grazing <- function(track, habitat, metric = "patches") {
 
 #original sampling function by Dr. Michael Noonan
 
-sampling <- function(mass, crossings = 20) {
+sampling <- function(mass, crossings = 20, metric = "t") {
   
-  # total lifespan (based on number of range crossings)
+  # total lifespan (based on number of range crossings) in seconds
   lifespan <- round(prey.tau_p(mass)*crossings)
   
   # sampling interval (tau_v)
@@ -278,7 +269,9 @@ sampling <- function(mass, crossings = 20) {
            interval)
   
   #return the vector of sampling times
-  return(t)
+  if(metric == "t"){return(t)}
+  if(metric == "lifespan"){return(lifespan)}
+  if(metric == "interval"){return(interval)}
 }
 
 #----------------------------------------------------------------------
@@ -289,25 +282,12 @@ sampling <- function(mass, crossings = 20) {
 
 sampling2.0 <- function(mass, metric = "t") {
   
-  #convert mass to kg
-  mass <- mass / 1000
-  
-  #calculate BMR from Nagy 1987 https://doi.org/10.2307/1942620 
-  BMR <- 0.774 + 0.727*log10(mass)
-  
-  #Back transform 
-  BMR <- 10^BMR
-  
-  #calculate lifespan from Atanasov 2006 https://doi.org/10.1016/j.biosystems.2006.08.006
-  #Tls <- (Als+ * M^1.0511)/BMR, for 95 orders of mammals, including primates
-  #primates increase the value of Als+
-  lifespan <- (715800*mass^1.0511)/BMR
-  
-  #convert back to g
-  mass <- mass * 1000
+  #calculate lifespan in seconds
+  #de Magalhaes et al (2008) [results are reasonable so far]
+  lifespan <- (4.88*mass^0.153) * 31536000 # years to seconds
   
   #sampling interval (tau_v)
-  interval <- round(prey.tau_v(mass))
+  interval <- max(1, round(prey.tau_v(mass)))
   
   #lifespan and sampling interval for simulations
   t <- seq(0,
@@ -316,8 +296,9 @@ sampling2.0 <- function(mass, metric = "t") {
   
   #return vector of sampling times
   if(metric == "t"){return(t)}
-  if(metric == "lifespan"){return(lifespan)
-    stop("Invalid metric. Use 'offspring' or 'lifespan'.")}
+  if(metric == "lifespan"){return(lifespan)}
+  if(metric == "interval"){return(interval)}
+  stop("Invalid metric. Use 't' or 'offspring' or 'lifespan'.")
 }
 
 
@@ -403,7 +384,7 @@ prey.fitness.debkiss <- function(mass,
                                  yVA = 0.8, #mg
                                  metric = "offspring"){
   
-  #estimation of lifespan and reproduction
+  #estimation of reproduction
     
   #DEBkiss model: Jager T (2024). DEBkiss. A simple framework for animal energy budgets. Version 3.1. Leanpub: https://leanpub.com/debkiss_book.
   #ref values are from Desforges et al. (2017) https://doi.org/10.1038/srep46267
@@ -440,7 +421,10 @@ prey.fitness.debkiss <- function(mass,
   JV <- yVA*(kappa*JA - JM) #structural growth flux
   
   #initialize
-  dt <- round(prey.tau_v(mass)) / 60 / 60 / 24 #convert seconds to days
+  #calculate lifespan in seconds
+  #de Magalhaes et al (2008) [results are reasonable so far]
+  lifespan <- (4.88*mass^0.153) * 365 # years to days
+  dt <- lifespan #interval over entire lifespan
   
   #initial offspring
   offspring <- numeric(n_prey)
@@ -464,7 +448,6 @@ prey.fitness.debkiss <- function(mass,
     if(yBA * WR[i] >= WB0[i]) {
       delta_R <- floor((yBA*WR[i])/WB0[i])
       offspring[i] <- delta_R
-      WR[i] <- WR[i] - (delta_R * WB0[i])/yBA
     }
   } #closes individuals loop
   
