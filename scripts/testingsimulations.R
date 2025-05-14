@@ -18,16 +18,6 @@ library(dplyr)
 source("functions.R")
 
 #----------------------------------------------------------------------
-# Set up the global parameters for the simulation
-#----------------------------------------------------------------------
-
-# Predator mass (g)
-mass_pred <- 5000
-
-# Prey mass (g)
-mass_prey <- prey.mass(mass_pred)
-
-#----------------------------------------------------------------------
 # testing prey.mod function
 #----------------------------------------------------------------------
 
@@ -121,17 +111,10 @@ mod3 <- ctmm(tau = c(prey_tau_p, prey_tau_v),
 t3 <- seq(0, 5 %#% "month", 1 %#% "hour")
 SIM3 <- simulate(mod3, t = t3)
 
-#extract raster values along path (not needed?)
-track_df <- data.frame(x = SIM3$x, y = SIM3$y)
-track_prey <- vect(track_df, geom = c("x", "y"))
-res_vals <- extract(FOOD, track_prey)[, 2]
-total_resources <- sum(res_vals, na.rm = TRUE)
-cat("total resource encountered by prey:", total_resources, "\n")
-
 #use grazing function
-patch_visits <- grazing(track_df, FOOD, metric = "patches")
+patch_visits <- grazing(SIM3, FOOD, metric = "patches")
 print(patch_visits)
-time_between <- grazing(track_df, FOOD, metric = "time")
+time_between <- grazing(SIM3, FOOD, metric = "time")
 print(time_between)
 
 #fit and visualize
@@ -146,23 +129,71 @@ plot(SIM3, UD = HR3)
 
 
 #----------------------------------------------------------------------
+# troubleshooting 
+#----------------------------------------------------------------------
+
+#generate raster
+FOOD <- rast(ncol = 5, nrow = 5, xmin = 0, xmax = 5, ymin = 0, ymax = 5)
+values(FOOD) <- 1
+
+#grazing function
+track_df <- data.frame(
+  x = c(0.5, 1.5, 2.5, 3.5, 4.5),  # Moves right across columns
+  y = c(0.5, 0.5, 0.5, 0.5, 0.5)   # Same row, left to right
+)
+
+patches <- grazing(track_df, FOOD, metric = "patches")
+print(patches)
+
+
+#sampling function(s)
+#parameters needed 
+prey_mass_test <- 25
+
+sampling_t <- sampling(prey_mass_test, crossings = 20, metric = "t")
+sampling_lifespan <- sampling(prey_mass_test,crossings = 20, metric = "lifespan")
+sampling_interval <- sampling(prey_mass_test,crossings = 20, metric = "interval")
+
+print(sampling_t)
+print(sampling_lifespan)
+print(sampling_interval)
+
+sampling2.0_t <- sampling2.0(prey_mass_test, metric = "t")
+sampling2.0_lifespan <- sampling2.0(prey_mass_test, metric = "lifespan")
+sampling2.0_interval <- sampling2.0(prey_mass_test, metric = "interval")
+
+print(sampling2.0_t)
+print(sampling2.0_lifespan)
+print(sampling2.0_interval)
+
+lifespan <- (4.88*(21)^0.153) * 31536000
+print(lifespan)
+
+
+#----------------------------------------------------------------------
 # trying loops
 #----------------------------------------------------------------------
 
+# Predator mass (g)
+mass_pred <- 5000
+
+# Prey mass (g)
+mass_prey <- prey.mass(mass_pred)
+
 #set sampling interval and lifespan
-t <- sampling(mass_prey)
+t <- sampling2.0(mass_prey)
 
 #energetic value of a patch
 CALS <- ((10^(0.774 + 0.727*log10(mass_prey)))^1.22)/150
 
 #number of individuals in arena
-n_prey <- 10
+n_prey <- 5
 
 #number of arenas
-REPS <- 20
+REPS <- 5
 
 #number of generations
-GENS <- 100
+GENS <- 50
 
 #build food raster
 FOOD <- patches(mass_prey, width = 20, pred = FALSE, type = "uniform")
@@ -232,12 +263,11 @@ for(G in 1:GENS) {
     
     f <- vector()
     for(i in 1:n_prey){
-      f[i] <- calculate_f(benefits_prey)
+      f[i] <- calculate_f(benefits_prey[[i]])
     }
     
     offspring_prey <- prey.fitness.debkiss(mass = mass_prey,
                                            f = f,
-                                           models = PREY_mods,
                                            metric = "offspring")
     
     #get values
@@ -245,12 +275,10 @@ for(G in 1:GENS) {
     prey_TAU_V <- vector()
     prey_TAU_P <- vector()
     prey_SIGMA <- vector()
-    prey_SPEED <-vector()
     for(i in 1:n_prey){
       prey_TAU_V[i] <- PREY_mods[[i]]$tau["velocity"]
       prey_TAU_P[i] <- PREY_mods[[i]]$tau["position"]
       prey_SIGMA[i] <- ctmm:::area.covm(PREY_mods[[i]]$sigma)
-      prey_SPEED[i] <- if(nrow(summary(PREY_mods[[i]], units = FALSE)$CI)==4){summary(PREY_mods[[i]], units = FALSE)$CI[4,2]} else{Inf}
       prey_lvs[i] <- sqrt((prey_TAU_V[i]/prey_TAU_P[i])*prey_SIGMA[i])
     }
     
@@ -259,7 +287,6 @@ for(G in 1:GENS) {
                             tau_p = prey_TAU_P,
                             tau_v = prey_TAU_V,
                             sig = prey_SIGMA,
-                            speed = prey_SPEED,
                             lv = prey_lvs,
                             patches = benefits_prey,
                             encounters = 0, 
@@ -292,9 +319,8 @@ for(G in 1:GENS) {
       
     } #Closes the if statement
   }
-  
-  print(G)
 }
+
 
 print(prey_res)
 

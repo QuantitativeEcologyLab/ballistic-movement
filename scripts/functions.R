@@ -233,7 +233,6 @@ grazing <- function(track, habitat, metric = "patches") {
   
   #convert track to data frame
   coords <- data.frame(x = track$x, y = track$y)
-  coords <- vect(track, geom = c("x", "y"))
   
   #Patch identities
   IDs <- cellFromXY(habitat, coords)
@@ -284,7 +283,7 @@ sampling2.0 <- function(mass, metric = "t") {
   
   #calculate lifespan in seconds
   #de Magalhaes et al (2008) [results are reasonable so far]
-  lifespan <- (4.88*mass^0.153) * 31536000 # years to seconds
+  lifespan <- (4.88*mass^0.153) * 365 # years to days
   
   #sampling interval (tau_v)
   interval <- max(1, round(prey.tau_v(mass)))
@@ -300,6 +299,7 @@ sampling2.0 <- function(mass, metric = "t") {
   if(metric == "interval"){return(interval)}
   stop("Invalid metric. Use 't' or 'offspring' or 'lifespan'.")
 }
+
 
 
 #----------------------------------------------------------------------
@@ -370,11 +370,7 @@ calculate_f <- function(benefits, f_max = 1, saturation  = 10) {
 #calculate fitness 
 prey.fitness.debkiss <- function(mass, 
                                  f,
-                                 costs = NULL, 
-                                 models,
-                                 crossings = 20, 
-                                 calories = 10, 
-                                 constant = 1,
+                                 costs = NULL,
                                  kappa = 0.8,
                                  JaAM_ref = 0.24, #g/cm^2d
                                  mass_ref = 671.8, #g, from Lariviere (1999) 
@@ -385,8 +381,9 @@ prey.fitness.debkiss <- function(mass,
                                  metric = "offspring"){
   
   #estimation of reproduction
-    
-  #DEBkiss model: Jager T (2024). DEBkiss. A simple framework for animal energy budgets. Version 3.1. Leanpub: https://leanpub.com/debkiss_book.
+  
+  #DEBkiss model: Jager T (2024). DEBkiss. A simple framework for animal energy budgets. 
+  #Version 3.1. Leanpub: https://leanpub.com/debkiss_book.
   #ref values are from Desforges et al. (2017) https://doi.org/10.1038/srep46267
   
   # Standardize mass and functional response input
@@ -399,7 +396,7 @@ prey.fitness.debkiss <- function(mass,
   L <- (mass / dV)^(1/3)
   
   #reproductive buffer, can use litter mass as a proxy, therefore
-  #m_litter = 0.637 * mass^0.778 Huijsmans et al. (2024)
+  #m_litter = 0.637 * mass^0.778 from Huijsmans et al. (2024)
   WR <- 0.637*mass^0.778 
   Wv_initial <- mass - WR #proxy
   Wv <- Wv_initial
@@ -431,11 +428,17 @@ prey.fitness.debkiss <- function(mass,
   
   #loop over individuals
   for(i in 1:n_prey){
-   #update structural mass
+    # Skip iteration if any key value is NA
+    if (any(is.na(c(Wv[i], WvP[i], JA[i], JV[i], WR[i], WB0[i], dt[i])))) {
+      offspring[i] <- 0
+      next
+    }
+    
+    #update structural mass
     Wv[i] <- Wv[i] + JV[i] * dt[i]
     
     #reproductive flux (post-puberty)
-    JR <- if(Wv[i] > WvP[i]) {
+    JR <- if(!is.na(Wv[i]) && ! is.na(WvP[i]) && Wv[i] > WvP[i]) {
       (1 - kappa) * JA[i]
     } else {
       0
@@ -445,7 +448,7 @@ prey.fitness.debkiss <- function(mass,
     WR[i] <- WR[i] + JR * dt[i]
     
     #offspring production
-    if(yBA * WR[i] >= WB0[i]) {
+    if(!is.na(WR[i]) && !is.na(WB0[i]) && (yBA * WR[i]) >= WB0[i]) {
       delta_R <- floor((yBA*WR[i])/WB0[i])
       offspring[i] <- delta_R
     }
