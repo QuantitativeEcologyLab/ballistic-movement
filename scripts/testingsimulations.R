@@ -150,7 +150,7 @@ plot(SIM3, UD = HR3)
 #----------------------------------------------------------------------
 
 #set sampling interval and lifespan
-t <- seq(0,1 %#% 'month', 1 %#% 'hr')
+t <- sampling(mass_prey)
 
 #energetic value of a patch
 CALS <- ((10^(0.774 + 0.727*log10(mass_prey)))^1.22)/150
@@ -237,10 +237,6 @@ for(G in 1:GENS) {
     
     offspring_prey <- prey.fitness.debkiss(mass = mass_prey,
                                            f = f,
-                                           costs = 0,
-                                           crossings = 20,
-                                           calories = 10,
-                                           DEBkiss = TRUE,
                                            models = PREY_mods,
                                            metric = "offspring")
     
@@ -311,44 +307,19 @@ plot(res_df$generation, res_df$rel_change_lv, type = "b", pch = 19,
      xlab = "gen", ylab = "rel change in lv")
 abline(h = 1, lty = 2, col = "gray")
 
+##ggplot version w/ variance ribbon
+lv0 <- res_df$lv[1]
+res_df$rel_var <- res_df$var / (lv0^2)
+res_df$rel_sd <- sqrt(res_df$rel_var)
 
-##ggplot version
-res_df <- do.call(rbind, lapply(seq_along(prey_res), function(i){
-  df <- prey_res[[i]]
-  df$sim <- i
-  df
-}))
-
-summary_df <- res_df %>%
-  group_by(generation) %>%
-  summarize(
-    lv_mean = mean(lv),
-    lv_sd = sd(lv),
-    .groups = "drop"
-  ) %>%
-  mutate(
-    lv_se = lv_sd / sqrt(n_prey),
-    lv_ci95 = 1.96 * lv_se,
-    rel_change_lv = lv_mean / lv_mean[1],
-    lower = (lv_mean - lv_sd) / lv_mean[1],
-    upper = (lv_mean + lv_sd) / lv_mean[1]
-  )
-
-
-ggplot(summary_df, aes(x = generation, y = rel_change_lv)) +
-  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "red", alpha = 0.2) +
-  geom_line(color = "red", size = 1) +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "gray50") +
-  labs(
-    x = "Generation",
-    y = "Relative change in lv"
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(
-    panel.grid = element_blank(),
-    axis.line = element_line(color = "black"),
-    axis.ticks = element_line()
-  )
+ggplot(res_df, aes(x = generation, y = rel_change_lv)) +
+  geom_ribbon(aes(ymin = rel_change_lv - rel_sd,
+                  ymax = rel_change_lv + rel_sd),
+              fill = "red", alpha = 0.3) + 
+  geom_line(color = "red", linewidth = 1) +
+  geom_hline(yintercept = 1.0, linetype = "dashed", color = "gray")+
+  labs(x = "Generation", y = "Relative change in lv") +
+  theme_minimal()
 
 #plot the movement paths
 # Flatten list of tracks into data frame

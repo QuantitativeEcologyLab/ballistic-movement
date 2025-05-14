@@ -418,9 +418,8 @@ prey.fitness.debkiss <- function(mass,
   L <- (mass / dV)^(1/3)
   
   #reproductive buffer, can use litter mass as a proxy, therefore
-  #m_litter ~ kM^b, with k $\approx$ 0.2 (mammals) and b $\approx$ 0.8-1.0
-  #source?
-  WR <- 0.2 * mass^1.0 
+  #m_litter = 0.637 * mass^0.778 Huijsmans et al. (2024)
+  WR <- 0.637*mass^0.778 
   Wv_initial <- mass - WR #proxy
   Wv <- Wv_initial
   
@@ -449,21 +448,21 @@ prey.fitness.debkiss <- function(mass,
   #loop over individuals
   for(i in 1:n_prey){
    #update structural mass
-    Wv[i] <- Wv[i] + JV[i] *dt[i]
+    Wv[i] <- Wv[i] + JV[i] * dt[i]
     
-    #reproductive flux (ppost-pubertty)
+    #reproductive flux (post-puberty)
     JR <- if(Wv[i] > WvP[i]) {
       (1 - kappa) * JA[i]
     } else {
       0
     }
     
-    #update reproductive buffer'
+    #update reproductive buffer
     WR[i] <- WR[i] + JR * dt[i]
     
     #offspring production
     if(yBA * WR[i] >= WB0[i]) {
-      delta_R <- floor((yBAA*WR[i])/WB0[i])
+      delta_R <- floor((yBA*WR[i])/WB0[i])
       offspring[i] <- delta_R
       WR[i] <- WR[i] - (delta_R * WB0[i])/yBA
     }
