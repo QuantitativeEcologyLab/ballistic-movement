@@ -193,7 +193,7 @@ n_prey <- 5
 REPS <- 5
 
 #number of generations
-GENS <- 50
+GENS <- 100
 
 #build food raster
 FOOD <- patches(mass_prey, width = 20, pred = FALSE, type = "uniform")
@@ -319,6 +319,8 @@ for(G in 1:GENS) {
       
     } #Closes the if statement
   }
+  
+  print(G)
 }
 
 
