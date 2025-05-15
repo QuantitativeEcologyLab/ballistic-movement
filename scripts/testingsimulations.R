@@ -187,13 +187,13 @@ t <- sampling2.0(mass_prey)
 CALS <- ((10^(0.774 + 0.727*log10(mass_prey)))^1.22)/150
 
 #number of individuals in arena
-n_prey <- 5
+n_prey <- 20
 
 #number of arenas
-REPS <- 5
+REPS <- 20
 
 #number of generations
-GENS <- 100
+GENS <- 10
 
 #build food raster
 FOOD <- patches(mass_prey, width = 20, pred = FALSE, type = "uniform")
@@ -319,7 +319,6 @@ for(G in 1:GENS) {
       
     } #Closes the if statement
   }
-  
   print(G)
 }
 
