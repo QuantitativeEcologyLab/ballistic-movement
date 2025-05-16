@@ -193,7 +193,7 @@ prey.mass <- function(mass, variance = FALSE) {
 # Generate raster of food patches based on mass_prey (g)
 #----------------------------------------------------------------------
 
-patches <- function(mass, width = 20, pred = FALSE,
+patches <- function(mass, width = 20, pred = FALSE, calories = 10,
                     type = c("uniform", "random")) {
   
   type <- match.arg(type)
@@ -221,6 +221,8 @@ patches <- function(mass, width = 20, pred = FALSE,
   {values(FOOD) <- runif(ncell(FOOD), min = 0.5, max = 1.5)
   }  
   
+  values(FOOD) <- values(FOOD) * calories
+  
   #Return the raster of food patches
   return(FOOD)
 }
@@ -244,8 +246,15 @@ grazing <- function(track, habitat, metric = "patches") {
   TIME <- mean(rle(c(FALSE, diff(IDs) != 0))$lengths)
   
   if(metric == "patches"){return(PATCHES)}
-  if(metric == "time"){return(TIME)
-    stop("Invalid metric. Use 'patches' or 'time'.")}
+  if(metric == "time"){return(TIME)}
+  if(metric == "calories") {
+    transitions <- which(c(FALSE, diff(IDs) != 0))
+    visited_ids <- IDs[transitions]
+    patch_values <- values(habitat)[visited_ids]
+    total_calories <- sum(patch_values, na.rm = TRUE)
+    return(total_calories)
+  }
+    stop("Invalid metric. Use 'patches' or 'time'.")
 }
 
 #----------------------------------------------------------------------
@@ -277,7 +286,7 @@ sampling <- function(mass, crossings = 20, metric = "t") {
 # trying something new for "lifespan" and sampling interval
 #----------------------------------------------------------------------
 
-#sampling function with lifespan scaled to body mass (Lynndsay Terpsma)
+#sampling function with lifespan scaled to body mass
 
 sampling2.0 <- function(mass, metric = "t") {
   
@@ -354,10 +363,40 @@ prey.fitness <- function(benefits, mass, costs = NULL, models, crossings = 20, c
 }
 
 #----------------------------------------------------------------------
+# predict maximum benefits
+#----------------------------------------------------------------------
+
+est.max.benefit <- function(tracks, habitat, metric = "calories",
+                            max_quantile = 0.99, saturation_quantile = 0.5){
+  # Defensive check: wrap in list if a single telemetry object
+  if (inherits(tracks, "telemetry")) {
+    tracks <- list(tracks)
+  }
+  
+  # Sanity check: ensure all are telemetry objects
+  if (!all(sapply(tracks, function(x) inherits(x, "telemetry")))) {
+    stop("All items in 'tracks' must be telemetry objects.")
+  }
+  
+  # Apply grazing over all tracks
+  benefit_values <- lapply(tracks, function(trk) {
+    grazing(trk, habitat, metric = metric)
+  })
+  
+  benefit_values <- unlist(benefit_values)
+  
+  return(list(
+    max_benefit = quantile(benefit_values, probs = max_quantile, na.rm = TRUE),
+    saturation = quantile(benefit_values, probs = saturation_quantile, na.rm = TRUE)
+  ))
+}
+
+
+#----------------------------------------------------------------------
 # convert number of patches visited into scaled functional response f
 #----------------------------------------------------------------------
 
-calculate_f <- function(benefits, f_max = 1, saturation  = 10) {
+calculate_f <- function(benefits, saturation, f_max = 1) {
   #simple saturation curve
   f <- f_max * benefits / (saturation + benefits)
   return(min(f, f_max)) #ensure f does not exceed 1
@@ -377,8 +416,8 @@ prey.fitness.debkiss <- function(mass,
                                  dV = 0.2, #mg/mm^3
                                  JvM_ref = 0.02, #g/cm^3d
                                  yBA = 0.95, #mg
-                                 yVA = 0.8, #mg
-                                 metric = "offspring"){
+                                 yVA = 0.8) #mg
+{
   
   #estimation of reproduction
   
@@ -390,70 +429,17 @@ prey.fitness.debkiss <- function(mass,
   if (length(mass) == 1) mass <- rep(mass, n_prey)
   if (length(f) == 1) f <- rep(f, n_prey)
   
-  #initialize individual states
-  #structural length L from mass 
-  #L^3 = Wv/dv, volumetric structural length
-  L <- (mass / dV)^(1/3)
-  
   #reproductive buffer, can use litter mass as a proxy, therefore
   #m_litter = 0.637 * mass^0.778 from Huijsmans et al. (2024)
   WR <- 0.637*mass^0.778 
-  Wv_initial <- mass - WR #proxy
-  Wv <- Wv_initial
-  
+
   #birth weight via allometric scaling in mammals (Blueweiss et al. 1978)
   #wet weight $\approx 0.75$ total weight, therefore dry mass $\approx 0.25$ (Fusch et al. 1999)
   WB0 <- 0.25*(0.097 * mass^(0.92))
   
-  #puberty threshold (Falconer 1984)
-  WvP <- 0.45 * mass 
-  
-  #assimilation (scaled with surface area ~ L^2)
-  JaAm <- JaAM_ref * (mass / mass_ref)^(2/3)
-  JA <- f * JaAm * L^2 #g/day
-  
-  #maintenance (scaled with volume ~ mass)
-  JvM <- rep(JvM_ref, n_prey) #constant
-  JM <- JvM * L^3 
-  JV <- yVA*(kappa*JA - JM) #structural growth flux
-  
-  #initialize
-  #calculate lifespan in seconds
-  #de Magalhaes et al (2008) [results are reasonable so far]
-  lifespan <- (4.88*mass^0.153) * 365 # years to days
-  dt <- lifespan #interval over entire lifespan
-  
-  #initial offspring
-  offspring <- numeric(n_prey)
-  
-  #loop over individuals
-  for(i in 1:n_prey){
-    # Skip iteration if any key value is NA
-    if (any(is.na(c(Wv[i], WvP[i], JA[i], JV[i], WR[i], WB0[i], dt[i])))) {
-      offspring[i] <- 0
-      next
-    }
-    
-    #update structural mass
-    Wv[i] <- Wv[i] + JV[i] * dt[i]
-    
-    #reproductive flux (post-puberty)
-    JR <- if(!is.na(Wv[i]) && ! is.na(WvP[i]) && Wv[i] > WvP[i]) {
-      (1 - kappa) * JA[i]
-    } else {
-      0
-    }
-    
-    #update reproductive buffer
-    WR[i] <- WR[i] + JR * dt[i]
-    
-    #offspring production
-    if(!is.na(WR[i]) && !is.na(WB0[i]) && (yBA * WR[i]) >= WB0[i]) {
-      delta_R <- floor((yBA*WR[i])/WB0[i])
-      offspring[i] <- delta_R
-    }
-  } #closes individuals loop
-  
+  #total offspring scaled to functional response
+  offspring <- floor(WR * yBA * f/ WB0)
+ 
   # If predator encounters are being considered,
   # individuals that encountered a predator are killed and don't reproduce.
   if(!is.null(costs)){

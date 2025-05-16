@@ -3,7 +3,7 @@
 #----------------------------------------------------------------------
 
 # Set the working directory
-setwd("~/ballistic_movement_models/scripts")
+setwd("~scripts")
 # Set the random seed
 set.seed(1)
 
@@ -15,7 +15,7 @@ library(ggplot2)
 library(dplyr)
 
 # Source the functions (ensure 'functions.R' is available in the working directory)
-source("functions.R")
+source("scripts/functions.R")
 
 #----------------------------------------------------------------------
 # testing prey.mod function
@@ -110,6 +110,7 @@ mod3 <- ctmm(tau = c(prey_tau_p, prey_tau_v),
 #simulate movement
 t3 <- seq(0, 5 %#% "month", 1 %#% "hour")
 SIM3 <- simulate(mod3, t = t3)
+print(SIM3)
 
 #use grazing function
 patch_visits <- grazing(SIM3, FOOD, metric = "patches")
@@ -132,43 +133,71 @@ plot(SIM3, UD = HR3)
 # troubleshooting 
 #----------------------------------------------------------------------
 
-#generate raster
-FOOD <- rast(ncol = 5, nrow = 5, xmin = 0, xmax = 5, ymin = 0, ymax = 5)
-values(FOOD) <- 1
+#patches and grazing
 
-#grazing function
-track_df <- data.frame(
-  x = c(0.5, 1.5, 2.5, 3.5, 4.5),  # Moves right across columns
-  y = c(0.5, 0.5, 0.5, 0.5, 0.5)   # Same row, left to right
-)
+mass3 <- 500
 
-patches <- grazing(track_df, FOOD, metric = "patches")
-print(patches)
+habitat <- patches(mass = mass3, type = "random", calories = 10, width = 10)
 
+#generate model
+mod3 <- ctmm(tau = c(prey_tau_p,prey_tau_v),
+             mu = c(0,0),
+             sigma = prey_sig)
 
-#sampling function(s)
-#parameters needed 
-prey_mass_test <- 25
+#define the sampling duration/schedule
 
-sampling_t <- sampling(prey_mass_test, crossings = 20, metric = "t")
-sampling_lifespan <- sampling(prey_mass_test,crossings = 20, metric = "lifespan")
-sampling_interval <- sampling(prey_mass_test,crossings = 20, metric = "interval")
+t3 <- seq(0,5 %#% 'month', 1 %#% 'hr')
 
-print(sampling_t)
-print(sampling_lifespan)
-print(sampling_interval)
+#simulate model
 
-sampling2.0_t <- sampling2.0(prey_mass_test, metric = "t")
-sampling2.0_lifespan <- sampling2.0(prey_mass_test, metric = "lifespan")
-sampling2.0_interval <- sampling2.0(prey_mass_test, metric = "interval")
+track <- simulate(mod3,t = t3)
 
-print(sampling2.0_t)
-print(sampling2.0_lifespan)
-print(sampling2.0_interval)
+patch_count <- grazing(track, habitat, metric = "patches")
+calories_consumed <- grazing(track, habitat, metric = "calories")
+time <- grazing(track, habitat, metric = "time")
 
-lifespan <- (4.88*(21)^0.153) * 31536000
-print(lifespan)
+print(patch_count)
+print(calories_consumed)
+print(time)
 
+plot(habitat)
+lines(track$x, track$y, col = "gray", lwd = 2)
+
+#test reproduction and benefits 
+preymasstest <- 50000
+
+testt <- sampling2.0(preymasstest, metric = "t")
+
+CALS <- ((10^(0.774 + 0.727*log10(preymasstest)))^1.22)/150
+
+foodtest <- patches(preymasstest, width = 20, pred = FALSE, type = "uniform", calories = 20)
+
+taup <- prey.tau_p(preymasstest)
+tauv <- prey.tau_v(preymasstest)
+sig <- prey.SIG(preymasstest)
+lv <- sqrt((tauv/taup)*sig)
+
+testmod <- ctmm(tau = c(taup, tauv),
+                      mu = c(0,0),
+                      sigma = sig)
+
+testtrack <- replicate(100, ctmm::simulate(testmod, t = testt), simplify = FALSE)
+print(testtrack)
+
+plot(foodtest)
+lines(testtrack$x, testtrack$y, col = "red", lwd = 2)
+
+maxcal <- est.max.benefit(testtrack, foodtest, metric = "calories")
+print(maxcal)
+
+graze <- grazing(track, foodtest, metric = "calories")
+
+f <- calculate_f(benefits = graze, saturation = maxcal$saturation)
+print(f)
+
+fitness <- prey.fitness.debkiss(mass = preymasstest,
+                                f = f)
+print(fitness)
 
 #----------------------------------------------------------------------
 # trying loops
@@ -187,16 +216,16 @@ t <- sampling2.0(mass_prey)
 CALS <- ((10^(0.774 + 0.727*log10(mass_prey)))^1.22)/150
 
 #number of individuals in arena
-n_prey <- 20
+n_prey <- 5
 
 #number of arenas
-REPS <- 20
+REPS <- 2
 
 #number of generations
-GENS <- 10
+GENS <- 200
 
 #build food raster
-FOOD <- patches(mass_prey, width = 20, pred = FALSE, type = "uniform")
+FOOD <- patches(mass_prey, width = 20, pred = FALSE, type = "uniform", calories = CALS)
 
 #lists for storing results
 prey_res <- list()
@@ -258,17 +287,18 @@ for(G in 1:GENS) {
     
     benefits_prey <- vector()
     for(i in 1:n_prey){
-      benefits_prey[i] <- grazing(PREY_tracks[[i]], FOOD)
+      benefits_prey[i] <- grazing(PREY_tracks[[i]], FOOD, metric = "calories")
     }
+    
+    maxben <- as.list(est.max.benefit(tracks = PREY_tracks, habitat = FOOD, metric = "calories"))
     
     f <- vector()
     for(i in 1:n_prey){
-      f[i] <- calculate_f(benefits_prey[[i]])
+      f[i] <- calculate_f(benefits_prey[[i]], saturation = maxben$saturation)
     }
     
     offspring_prey <- prey.fitness.debkiss(mass = mass_prey,
-                                           f = f,
-                                           metric = "offspring")
+                                           f = f)
     
     #get values
     prey_lvs <- vector()
@@ -324,6 +354,10 @@ for(G in 1:GENS) {
 
 
 print(prey_res)
+
+prey_details[[G]]$offspring
+sum(prey_details[[G]]$offspring)  # total offspring in gen G
+mean(prey_details[[G]]$offspring) # average offspring per individual in gen G
 
 #model change in lv over generations
 res_df <- do.call(rbind, prey_res)
