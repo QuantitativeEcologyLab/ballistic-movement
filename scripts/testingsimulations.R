@@ -1,6 +1,5 @@
-#----------------------------------------------------------------------
-# Preamble
-#----------------------------------------------------------------------
+
+# Preamble ----
 
 # Set the working directory
 setwd("~scripts")
@@ -15,7 +14,7 @@ library(ggplot2)
 library(dplyr)
 
 # Source the functions (ensure 'functions.R' is available in the working directory)
-source("scripts/functions.R")
+source("functions.R")
 
 #----------------------------------------------------------------------
 # testing prey.mod function
@@ -170,7 +169,7 @@ testt <- sampling2.0(preymasstest, metric = "t")
 
 CALS <- ((10^(0.774 + 0.727*log10(preymasstest)))^1.22)/150
 
-foodtest <- patches(preymasstest, width = 20, pred = FALSE, type = "uniform", calories = 20)
+foodtest <- newpatches(preymasstest, width = 20, pred = FALSE, type = "uniform", calories = 20)
 
 taup <- prey.tau_p(preymasstest)
 tauv <- prey.tau_v(preymasstest)
@@ -181,23 +180,70 @@ testmod <- ctmm(tau = c(taup, tauv),
                       mu = c(0,0),
                       sigma = sig)
 
-testtrack <- replicate(100, ctmm::simulate(testmod, t = testt), simplify = FALSE)
+testtrack <- simulate(testmod, t = testt)
 print(testtrack)
+
+coords <- data.frame(testtrack$x, testtrack$y)
+print(coords)
 
 plot(foodtest)
 lines(testtrack$x, testtrack$y, col = "red", lwd = 2)
 
-maxcal <- est.max.benefit(testtrack, foodtest, metric = "calories")
-print(maxcal)
+graze <- grazing(testtrack, foodtest, metric = "ids")
 
-graze <- grazing(track, foodtest, metric = "calories")
+# Extract movement speeds from the models
+model_summary <- summary(testmod, units = FALSE)
 
-f <- calculate_f(benefits = graze, saturation = maxcal$saturation)
-print(f)
+# Ensure model_summary has $CI before accessing
+if(!is.null(model_summary$CI) && nrow(model_summary$CI) == 4){
+  SPEED <- model_summary$CI[4, 2]
+} else {
+  SPEED <- Inf
+}
+print(SPEED)
+#extract transitions between patches
+transitions <- c(1, which(diff(graze) !=0) + 1) #including initial patch
+visited <- graze[transitions]
+print(visited)
+
+#gain in calories
+patch_values <- values(foodtest)[visited]
+total_gain <- sum(patch_values, na.rm = TRUE)
+
+# Metabolic cost of movement in watts/kg from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1 
+E1 = 10.7*(preymasstest/1000)^(-0.316)*SPEED + 6.03*(preymasstest/1000)^(-0.303)
+
+#Convert to kJ/s
+E2 <- (E1 * (preymasstest/1000))/1000
+
+#convert to calories/s
+E3 <- E2 * 239.005736
+print(E1)
+print(E2)
+print(E3)
+
+num_movements <- length(transitions) - 1
+total_cost <- num_movements * E
+
+print(total_gain)
+print(total_cost)
+
+net <- total_gain - total_cost
+print(net)
+
+net_cap <- max(0, min(net, total_gain))
+
+net_scaled <- if (net_cap == 0) 0 else net / net_cap
+print(net_scaled)
+
+scaled <- scaled.energy(IDs = graze, habitat = foodtest, mass = preymasstest, models = testmod)
+print(scaled)
 
 fitness <- prey.fitness.debkiss(mass = preymasstest,
-                                f = f)
+                                f = f,
+                                net_energy = net_scaled)
 print(fitness)
+
 
 #----------------------------------------------------------------------
 # trying loops
@@ -216,10 +262,10 @@ t <- sampling2.0(mass_prey)
 CALS <- ((10^(0.774 + 0.727*log10(mass_prey)))^1.22)/150
 
 #number of individuals in arena
-n_prey <- 5
+n_prey <- 10
 
 #number of arenas
-REPS <- 2
+REPS <- 10
 
 #number of generations
 GENS <- 100
@@ -285,20 +331,24 @@ for(G in 1:GENS) {
       PREY_tracks[[i]] <- simulate(PREY_mods[[i]], t = t)
     }
     
-    benefits_prey <- vector()
+    benefits_prey <- vector("list", n_prey)
     for(i in 1:n_prey){
-      benefits_prey[i] <- grazing(PREY_tracks[[i]], FOOD, metric = "calories")
+      benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD, metric = "ids")
     }
     
-    maxben <- as.list(est.max.benefit(tracks = PREY_tracks, habitat = FOOD, metric = "calories"))
-    
-    f <- vector()
+    net_energy <- numeric(n_prey)
     for(i in 1:n_prey){
-      f[i] <- calculate_f(benefits_prey[[i]], saturation = maxben$saturation)
+      net_energy[i] <- scaled.energy(IDs = benefits_prey[[i]], 
+                                     habitat = FOOD, 
+                                     models = PREY_mods[[i]], 
+                                     mass = if(length(mass_prey) > 1) mass_prey[i]
+                                     else mass_prey)
     }
+    
     
     offspring_prey <- prey.fitness.debkiss(mass = mass_prey,
-                                           f = f)
+                                           f = f,
+                                           net_energy = net_energy)
     
     #get values
     prey_lvs <- vector()
@@ -318,8 +368,6 @@ for(G in 1:GENS) {
                             tau_v = prey_TAU_V,
                             sig = prey_SIGMA,
                             lv = prey_lvs,
-                            patches = benefits_prey,
-                            f = f,
                             encounters = 0, 
                             offspring = offspring_prey)
   }
@@ -363,11 +411,11 @@ mean(prey_details[[G]]$offspring) # average offspring per individual in gen G
 #model change in lv over generations
 res_df <- do.call(rbind, prey_res)
 
-res_df$rel_change_lv <- res_df$lv / res_df$lv[1]
+res_df$rel_change_lv <- (res_df$lv - res_df$lv[1]) / res_df$lv[1]
 
 plot(res_df$generation, res_df$rel_change_lv, type = "b", pch = 19,
      xlab = "gen", ylab = "rel change in lv")
-abline(h = 1, lty = 2, col = "gray")
+abline(h = 0, lty = 2, col = "gray")
 
 ##ggplot version w/ variance ribbon
 lv0 <- res_df$lv[1]
@@ -379,7 +427,7 @@ ggplot(res_df, aes(x = generation, y = rel_change_lv)) +
                   ymax = rel_change_lv + rel_sd),
               fill = "red", alpha = 0.3) + 
   geom_line(color = "red", linewidth = 1) +
-  geom_hline(yintercept = 1.0, linetype = "dashed", color = "gray")+
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray")+
   labs(x = "Generation", y = "Relative change in lv") +
   theme_minimal()
 
@@ -392,10 +440,14 @@ track_df <- do.call(rbind, lapply(1:length(PREY_tracks), function(i) {
              id = as.factor(i))
 }))
 
-ggplot(track_df, aes(x = x, y = y, group = id, color = id)) +
-  geom_path() +
+food_df <- as.data.frame(FOOD, xy = TRUE)
+colnames(food_df) <- c("x", "y", "value")
+
+ggplot() +
+  geom_raster(data = food_df, aes(x = x, y = y, fill = value)) +
+  geom_path(data = track_df, aes(x = x, y = y, group = id, color = id), inherit.aes = FALSE) +
   theme_minimal() +
-  labs(title = "Prey Movement Tracks", x = "X", y = "Y") +
+  labs(title = "Prey Movement over Food Landscape", x = "X", y = "Y") +
   theme(legend.position = "none")
 
 

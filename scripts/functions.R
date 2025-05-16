@@ -193,7 +193,7 @@ prey.mass <- function(mass, variance = FALSE) {
 # Generate raster of food patches based on mass_prey (g)
 #----------------------------------------------------------------------
 
-patches <- function(mass, width = 20, pred = FALSE, calories = 10,
+newpatches <- function(mass, width = 20, pred = FALSE, calories = 10,
                     type = c("uniform", "random")) {
   
   type <- match.arg(type)
@@ -231,7 +231,7 @@ patches <- function(mass, width = 20, pred = FALSE, calories = 10,
 # Count the number of patches visited (assumes immediate renewal)
 #----------------------------------------------------------------------
 
-grazing <- function(track, habitat, metric = "patches") {
+grazing <- function(track, habitat, metric = "ids") {
   
   #convert track to data frame
   coords <- data.frame(x = track$x, y = track$y)
@@ -247,14 +247,51 @@ grazing <- function(track, habitat, metric = "patches") {
   
   if(metric == "patches"){return(PATCHES)}
   if(metric == "time"){return(TIME)}
-  if(metric == "calories") {
-    transitions <- which(c(FALSE, diff(IDs) != 0))
-    visited_ids <- IDs[transitions]
-    patch_values <- values(habitat)[visited_ids]
-    total_calories <- sum(patch_values, na.rm = TRUE)
-    return(total_calories)
+  if(metric == "ids") {return(IDs)}
+    stop("Invalid metric. Use 'patches', 'time' or 'ids'.")
+}
+
+#----------------------------------------------------------------------
+# net benefits attempt
+#----------------------------------------------------------------------
+
+scaled.energy <- function(IDs, habitat, mass, models){
+  # Extract movement speeds from the models
+  model_summary <- summary(models, units = FALSE)
+  
+  # Ensure model_summary has $CI before accessing
+  if(!is.null(model_summary$CI) && nrow(model_summary$CI) == 4){
+    SPEED <- model_summary$CI[4, 2]
+  } else {
+    SPEED <- Inf
   }
-    stop("Invalid metric. Use 'patches' or 'time'.")
+  #extract transitions between patches
+  transitions <- c(1, which(diff(IDs) !=0) + 1) #including initial patch
+  visited <- IDs[transitions]
+  
+  #gain in calories
+  patch_values <- values(habitat)[visited]
+  total_gain <- sum(patch_values, na.rm = TRUE)
+  
+  # Metabolic cost of movement in watts/kg from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1 
+  E = 10.7*(mass/1000)^(-0.316)*SPEED + 6.03*(mass/1000)^(-0.303)
+  
+  #Convert to kJ/s
+  E <- (E * (mass/1000))/1000
+  
+  #convert to calories/s
+  E <- E * 239.005736
+  
+  num_movements <- length(transitions) - 1
+  total_cost <- num_movements * E
+  
+  net <- total_gain - total_cost
+  
+  net_cap <- max(0, min(net, total_gain))
+  
+  net_scaled <- if (net_cap == 0) 0 else net / net_cap
+  
+  return(net_scaled)
 }
 
 #----------------------------------------------------------------------
@@ -366,6 +403,8 @@ prey.fitness <- function(benefits, mass, costs = NULL, models, crossings = 20, c
 # predict maximum benefits
 #----------------------------------------------------------------------
 
+#might not be needed, just noodling
+
 est.max.benefit <- function(tracks, habitat, metric = "calories",
                             max_quantile = 0.99, saturation_quantile = 0.8){
   # Defensive check: wrap in list if a single telemetry object
@@ -396,6 +435,8 @@ est.max.benefit <- function(tracks, habitat, metric = "calories",
 # convert number of patches visited into scaled functional response f
 #----------------------------------------------------------------------
 
+#might not be needed, just noodling
+
 calculate_f <- function(benefits, saturation, f_max = 1) {
   #simple saturation curve
   f <- f_max * benefits / (saturation + benefits)
@@ -409,6 +450,7 @@ calculate_f <- function(benefits, saturation, f_max = 1) {
 #calculate fitness 
 prey.fitness.debkiss <- function(mass, 
                                  f,
+                                 net_energy,
                                  costs = NULL,
                                  kappa = 0.8,
                                  JaAM_ref = 0.24, #g/cm^2d
@@ -438,7 +480,7 @@ prey.fitness.debkiss <- function(mass,
   WB0 <- 0.25*(0.097 * mass^(0.92))
   
   #total offspring scaled to functional response
-  offspring <- floor(WR * yBA * f/ WB0)
+  offspring <- floor(WR * yBA * net_energy/ WB0)
  
   # If predator encounters are being considered,
   # individuals that encountered a predator are killed and don't reproduce.
