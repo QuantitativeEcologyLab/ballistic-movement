@@ -222,7 +222,7 @@ n_prey <- 5
 REPS <- 2
 
 #number of generations
-GENS <- 200
+GENS <- 100
 
 #build food raster
 FOOD <- patches(mass_prey, width = 20, pred = FALSE, type = "uniform", calories = CALS)
@@ -319,6 +319,7 @@ for(G in 1:GENS) {
                             sig = prey_SIGMA,
                             lv = prey_lvs,
                             patches = benefits_prey,
+                            f = f,
                             encounters = 0, 
                             offspring = offspring_prey)
   }
@@ -397,6 +398,9 @@ ggplot(track_df, aes(x = x, y = y, group = id, color = id)) +
   labs(title = "Prey Movement Tracks", x = "X", y = "Y") +
   theme(legend.position = "none")
 
+
+plot(prey$lv, prey$patches)
+plot(prey$f, prey$lv)
 
 
 

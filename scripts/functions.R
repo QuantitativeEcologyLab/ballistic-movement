@@ -367,7 +367,7 @@ prey.fitness <- function(benefits, mass, costs = NULL, models, crossings = 20, c
 #----------------------------------------------------------------------
 
 est.max.benefit <- function(tracks, habitat, metric = "calories",
-                            max_quantile = 0.99, saturation_quantile = 0.5){
+                            max_quantile = 0.99, saturation_quantile = 0.8){
   # Defensive check: wrap in list if a single telemetry object
   if (inherits(tracks, "telemetry")) {
     tracks <- list(tracks)
