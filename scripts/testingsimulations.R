@@ -201,6 +201,7 @@ if(!is.null(model_summary$CI) && nrow(model_summary$CI) == 4){
   SPEED <- Inf
 }
 print(SPEED)
+
 #extract transitions between patches
 transitions <- c(1, which(diff(graze) !=0) + 1) #including initial patch
 visited <- graze[transitions]
