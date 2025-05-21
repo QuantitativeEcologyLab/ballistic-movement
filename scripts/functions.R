@@ -4,7 +4,7 @@
 
 #Written by Michael Noonan and Lynndsay Terpsma
 
-#Last updated: May 1st 2025
+#Last updated: May 20th 2025
 
 
 #----------------------------------------------------------------------
@@ -193,7 +193,7 @@ prey.mass <- function(mass, variance = FALSE) {
 # Generate raster of food patches based on mass_prey (g)
 #----------------------------------------------------------------------
 
-patches <- function(mass, width = 20, pred = FALSE, calories = 10,
+createFoodRaster <- function(mass, width = 20, pred = FALSE, calories = 10,
                     type = c("uniform", "random")) {
   
   type <- match.arg(type)
@@ -207,7 +207,7 @@ patches <- function(mass, width = 20, pred = FALSE, calories = 10,
   
   #number of patches based on fixed patch width
   #N <- EXT/n
-  N <- EXT / width
+  N <- ceiling(2*EXT/width)
   
   #Build the raster
   FOOD <- rast(ncol = N, nrow = N, 
@@ -216,12 +216,14 @@ patches <- function(mass, width = 20, pred = FALSE, calories = 10,
   
   # assign values based on type of habitat
   if (type == "uniform") {
-    values(FOOD) <- 1
+    cell_values <- 1
   } else if (type == "random")
-  {values(FOOD) <- runif(ncell(FOOD), min = 0.5, max = 1.5)
+  {cell_values <- runif(ncell(FOOD), min = 0.1, max = 1.5)
   }  
   
-  values(FOOD) <- values(FOOD) * calories
+  cell_values <- cell_values * calories
+  
+  values(FOOD) <- cell_values
   
   #Return the raster of food patches
   return(FOOD)
@@ -252,40 +254,58 @@ grazing <- function(track, habitat, metric = "ids") {
 }
 
 #----------------------------------------------------------------------
-# net benefits attempt
+# calculate speed
 #----------------------------------------------------------------------
 
-cal.net <- function(IDs, habitat, mass, models){
+speed_val <- function(models){
   # Extract movement speeds from the models
   model_summary <- summary(models, units = FALSE)
   
   # Ensure model_summary has $CI before accessing
-  if(!is.null(model_summary$CI) && nrow(model_summary$CI) == 4){
-    SPEED <- model_summary$CI[4, 2]
+  if(!is.null(model_summary$CI) && nrow(model_summary$CI) == 5){
+    SPEED <- model_summary$CI[4, "est"]
   } else {
     SPEED <- Inf
   }
-  #extract transitions between patches
-  transitions <- c(1, which(diff(IDs) !=0) + 1) #including initial patch
-  visited <- IDs[transitions]
-  
+  return(SPEED)
+}
+
+#----------------------------------------------------------------------
+# net benefits attempt
+#----------------------------------------------------------------------
+
+cals_net <- function(IDs, habitat, mass, models, speed, interval){
+
   #gain in calories
-  patch_values <- values(habitat)[visited]
-  total_gain <- sum(patch_values, na.rm = TRUE)
+  patch_values <- values(habitat)[IDs]
+  gain_total <- sum(patch_values, na.rm = TRUE)
+  
+  # Basal metabolic rate (in kj/day) from Nagy 1987 https://doi.org/10.2307/1942620 
+  BMR <- 0.774 + 0.727*log10(mass)
+  #Back transform 
+  BMR <- 10^BMR
+  #convert to calories/sec
+  BMR <- (BMR * 239.005736) / 86400
+  
+  #lifespan calculations
+  lifespan <- (4.88*mass^0.153) * 31536000 # years to seconds
+  time_total <- lifespan * 0.001 # 1/1000 of a lifespan
+  
+  BMR_cost <- BMR * time_total
   
   # Metabolic cost of movement in watts/kg from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1 
-  E = 10.7*(mass/1000)^(-0.316)*SPEED + 6.03*(mass/1000)^(-0.303)
-  
+  E = 10.7*(mass/1000)^(-0.316)*speed + 6.03*(mass/1000)^(-0.303)
   #Convert to kJ/s
   E <- (E * (mass/1000))/1000
-  
-  #convert to calories/s
+  #Convert to calories/s
   E <- E * 239.005736
   
-  num_movements <- length(transitions) - 1 #this isn't right
-  total_cost <- num_movements * E
+  num_movements <- sum(diff(IDs) != 0)
+  cost_move <- num_movements*E*interval 
   
-  cal_net <- total_gain - total_cost
+  cost_total <- BMR_cost + cost_move
+  
+  cal_net <- gain_total - cost_total
   
   return(cal_net)
 }
@@ -301,14 +321,14 @@ sampling <- function(mass, metric = "t") {
   #calculate lifespan in seconds
   #de Magalhaes et al (2008) 
   lifespan <- (4.88*mass^0.153) * 31536000 # years to seconds
+  lifespan_int <- lifespan * 0.001 # 1/1000 of a lifespan
   
-  #sampling interval (tau_v)
+  #sampling interval (tau_v) in seconds
   interval <- max(1, round(prey.tau_v(mass)))
   
   #lifespan and sampling interval for simulations
-  #sample movement from 1/10 of lifespan
   t <- seq(0,
-           lifespan*0.1,
+           lifespan_int,
            interval)
   
   #return vector of sampling times
@@ -320,40 +340,41 @@ sampling <- function(mass, metric = "t") {
 
 
 #----------------------------------------------------------------------
-# Prey fitness function 2.0
+# Prey fitness function 
 #----------------------------------------------------------------------
 
 #calculate fitness 
-prey.fitness.debkiss <- function(mass, 
-                                 f,
-                                 cal_net,
-                                 costs = NULL) 
+prey.fitness <- function(mass, 
+                         cal_net,
+                         costs = NULL) 
 {
   
   #DEBkiss model: Jager T (2024). DEBkiss. A simple framework for animal energy budgets. 
   #Version 3.1. Leanpub: https://leanpub.com/debkiss_book.
   
-  # Standardize mass and functional response input
+  # Standardize mass input
   if (length(mass) == 1) mass <- rep(mass, n_prey)
-  if (length(f) == 1) f <- rep(f, n_prey)
   
   #update weight
   #let weight_gain (g) = calorie surplus (kcal) / energy cost of tissue (kcal/g)
   #estimate value for cost from Waterlow et al. (1981)
-  weight.gain <- cal_net / 5
-  mass.update <- mass + weight.gain
+  weight.gain <- cal_net / 20
+  mass.update <- mass+weight.gain
   
   #reproductive buffer, can use litter mass as a proxy, therefore
   #m_litter = 0.637 * mass^0.778 from Huijsmans et al. (2024)
-  W_R <- 0.637*mass.update^0.778 
+  W_R <- 0.637*(mass.update^0.778) 
 
   #birth weight via allometric scaling in mammals (Blueweiss et al. 1978)
   #wet weight $\approx$ 0.75 total weight, therefore dry mass $\approx$ 0.25 (Fusch et al. 1999)
-  W_B0 <- 0.25*(0.097 * mass.update^(0.92))
+  W_B0 <- 0.25*(0.097*mass.update^(0.92))
   
   #total offspring scaled to functional response
-  offspring <- floor(W_R / W_B0)
+  offspring <- floor(W_R/W_B0) 
  
+  #set offspring to 0 is cal_net <= 0
+  offspring[cal_net <= 0] <- 0
+  
   #If predator encounters are being considered,
   #individuals that encountered a predator are killed and don't reproduce.
   if(!is.null(costs)){
@@ -363,9 +384,9 @@ prey.fitness.debkiss <- function(mass,
   #clamp minimum offspring to 0
   offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #Clamp the minimum to 0
   
-  return(offspring)
+  return(list(offspring = offspring, mass_update = mass.update))
 }
-  
+
 #----------------------------------------------------------------------
 # Identify Encounter Events
 #----------------------------------------------------------------------
