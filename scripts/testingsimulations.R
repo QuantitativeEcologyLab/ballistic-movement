@@ -13,6 +13,7 @@ library(terra)
 library(ggplot2)
 library(dplyr)
 library(gridExtra)
+library(patchwork)
 
 # Source the functions (ensure 'functions.R' is available in the working directory)
 source("functions.R")
@@ -25,7 +26,7 @@ source("functions.R")
 mass_pred <- 5000
 
 # Prey mass (g)
-mass_prey <- 200
+mass_prey <- 1000
 
 #set sampling interval and lifespan
 t <- sampling(mass_prey)
@@ -35,17 +36,18 @@ interval <- sampling(mass_prey, metric = "interval")
 CALS <- ((10^(0.774 + 0.727*log10(mass_prey)))^1.22)/150
 
 #number of individuals in arena
-n_prey <- 1
+n_prey <- 10
 
 #number of arenas
-REPS <- 1
+REPS <- 3
 
 #number of generations
-GENS <- 10
+GENS <- 100
 
 #build food raster
-FOOD <- createFoodRaster(mass_prey, width = 20, pred = FALSE, type = "uniform", calories = CALS)
-plot(FOOD)
+FOOD <- createFoodRaster(mass_prey)
+plot(FOOD, col = "steelblue")
+grid(nx = ncol(FOOD), ny = nrow(FOOD), col = "black", lty = "dotted")
 
 #lists for storing results
 prey_res <- list()
@@ -120,19 +122,36 @@ for(G in 1:GENS) {
       speed[[i]] <- speed_val(models = PREY_mods[[i]])
     }
     
+    cal_list <- vector("list", n_prey)
     cal_net <- numeric(n_prey)
+    cal_max <- numeric(n_prey)
     for(i in 1:n_prey){
-      cal_net[[i]] <- cals_net(IDs = benefits_prey[[i]], 
-                              habitat = FOOD, 
-                              mass = mass_prey, 
-                              models = PREY_mods[[i]],
-                              speed = speed[[i]],
-                              interval = interval)
+      mass <- if(length(mass_prey) == 1) mass_prey else mass_prey[i]
+      
+      cal_list[[i]] <- cals_net(IDs = benefits_prey[[i]], 
+                               habitat = FOOD, 
+                               mass = mass, 
+                               models = PREY_mods[[i]],
+                               speed = speed[[i]],
+                               interval = interval)
+      # Defensive: check result is valid
+      if (is.list(cal_list[[i]]) &&
+          all(c("cal_net", "cal_max") %in% names(cal_list[[i]]))) {
+        
+        cal_net[i] <- cal_list[[i]]$cal_net
+        cal_max[i] <- cal_list[[i]]$cal_max
+        
+      } else {
+        cal_net[i] <- NA
+        cal_max[i] <- NA
+        warning(sprintf("Invalid result from cals_net for individual %d", i))
+      }
     }
     
     
     results <- prey.fitness(mass = mass_prey,
-                                   cal_net = cal_net)
+                            cal_net = cal_net)
+    
     offspring_prey <- results$offspring
     mass_update_prey <- results$mass_update
     
@@ -155,7 +174,8 @@ for(G in 1:GENS) {
                             sig = prey_SIGMA,
                             lv = prey_lvs,
                             patches = unlist(patches),
-                            cal = unlist(cal_net), 
+                            cal = cal_net,
+                            cal_max = cal_max,
                             speed = unlist(speed),
                             offspring = unlist(offspring_prey),
                             mass = mass_prey,
@@ -190,7 +210,6 @@ for(G in 1:GENS) {
   }
   print(G)
 }
-
 
 print(prey_res)
 print(prey_details)
@@ -279,10 +298,20 @@ offspring.mass <- ggplot(prey_details_df, aes(x = mass_update, y = offspring)) +
   geom_line(color = "red", linewidth = 1) +
   labs(
     y = "offspring",
-    x = "mass") +
+    x = "mass_updated") +
   theme_minimal()
 
 print(offspring.mass)
+
+# speed ~ mass
+speed.mass <- ggplot(prey_details_df, aes(x = mass_update, y = speed)) +
+  geom_line(color = "red", linewidth = 1) +
+  labs(
+    y = "speed",
+    x = "mass_updated") +
+  theme_minimal()
+
+print(speed.mass)
 
 # offspring ~ speed
 offspring.speed <- ggplot(prey_details_df, aes(x = speed, y = offspring)) +
@@ -354,22 +383,22 @@ move <- ggplot() +
 print(move)
 
 #final plot
-library(patchwork)
 
 plots <- list(rel.lv.gen,
               cal.lv, 
               offspring.lv, 
               patches.lv, 
+              patches.speed,
               speed.lv, 
+              speed.mass,
+              speed.gen,
               offspring.cal, 
-              offspring.mass, 
-              offspring.speed, 
-              patches.speed, 
-              speed.gen, 
+              offspring.mass,
+              offspring.speed,   
               tauv.gen, 
               taup.gen)
 
-final.plot <- wrap_plots(plots, ncol = 4)
+final.plot <- wrap_plots(plots, ncol = 3)
 print(final.plot)
 
 #prey lv and fitness
@@ -435,3 +464,4 @@ rect(xleft = mu - sig, xright = mu + sig,
      ybottom = par("usr")[3], ytop = par("usr")[4], 
      border = NA,
      col = adjustcolor("#046C9A", alpha = 0.3))
+

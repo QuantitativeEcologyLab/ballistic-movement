@@ -193,41 +193,41 @@ prey.mass <- function(mass, variance = FALSE) {
 # Generate raster of food patches based on mass_prey (g)
 #----------------------------------------------------------------------
 
-createFoodRaster <- function(mass, width = 20, pred = FALSE, calories = 10,
-                    type = c("uniform", "random")) {
+createFoodRaster <- function(mass, width = 20, pred = FALSE, 
+                             calories = 2125, #kcal/kg
+                             dry_biomass = 1, #kg/m^2 
+                             heterogeneity = FALSE) {
   
-  type <- match.arg(type)
-  
+  #note that biomass must be DRY biomass, not absolute biomass
+  #can use 0.3*biomass as a proxy
   # var[position]
   if(pred){SIG <- pred.SIG(mass)} else{
     SIG <- prey.SIG(mass)}
   
   # Range of raster based on 99.9% HR area
   EXT <- round(sqrt((-2*log(0.0001)*pi)* SIG))
-  
   #number of patches based on fixed patch width
-  #N <- EXT/n
   N <- ceiling(2*EXT/width)
+ 
+  biomass_raster <- rast(ncol = N, nrow = N,
+                         xmin = -EXT, xmax = EXT,
+                         ymin = -EXT, ymax = EXT)
   
-  #Build the raster
-  FOOD <- rast(ncol = N, nrow = N, 
-               xmin = -EXT, xmax = EXT, 
-               ymin = -EXT, ymax = EXT)
+  # Biomass raster (kg dry matter per patch)
+  if (heterogeneity) {
+    values(biomass_raster) <- runif(ncell(biomass_raster), 
+                                    min = 0.1, max = 1.5) * dry_biomass*width^2  # kg/m²
+  } else {
+    values(biomass_raster) <- dry_biomass*width^2
+  }
   
-  # assign values based on type of habitat
-  if (type == "uniform") {
-    cell_values <- 1
-  } else if (type == "random")
-  {cell_values <- runif(ncell(FOOD), min = 0.1, max = 1.5)
-  }  
+  calorie_raster <- biomass_raster * calories
+  attr(calorie_raster, "biomass") <- biomass_raster
+  attr(calorie_raster, "cal_per_kg") <- calories
   
-  cell_values <- cell_values * calories
-  
-  values(FOOD) <- cell_values
-  
-  #Return the raster of food patches
-  return(FOOD)
+  return(calorie_raster)
 }
+
 
 #----------------------------------------------------------------------
 # Count the number of patches visited (assumes immediate renewal)
@@ -250,7 +250,7 @@ grazing <- function(track, habitat, metric = "ids") {
   if(metric == "patches"){return(PATCHES)}
   if(metric == "time"){return(TIME)}
   if(metric == "ids") {return(IDs)}
-    stop("Invalid metric. Use 'patches', 'time' or 'ids'.")
+  stop("Invalid metric. Use 'patches', 'time' or 'ids'.")
 }
 
 #----------------------------------------------------------------------
@@ -275,39 +275,45 @@ speed_val <- function(models){
 #----------------------------------------------------------------------
 
 cals_net <- function(IDs, habitat, mass, models, speed, interval){
-
-  #gain in calories
+  
   patch_values <- values(habitat)[IDs]
   gain_total <- sum(patch_values, na.rm = TRUE)
   
-  # Basal metabolic rate (in kj/day) from Nagy 1987 https://doi.org/10.2307/1942620 
-  BMR <- 0.774 + 0.727*log10(mass)
-  #Back transform 
+  # Metabolic rate (kj/day) from Nagy 1897 https://doi.org/10.2307/1942620
+  BMR <- 0.774 + 0.727 * log10(mass)
+  # backtransform
   BMR <- 10^BMR
-  #convert to calories/sec
+  #convert to cal/s
   BMR <- (BMR * 239.005736) / 86400
   
-  #lifespan calculations
-  lifespan <- (4.88*mass^0.153) * 31536000 # years to seconds
+  # Time window
+  lifespan <- (4.88 * mass^0.153) * 31536000 #years to seconds
   time_total <- lifespan * 0.001 # 1/1000 of a lifespan
   
   BMR_cost <- BMR * time_total
   
-  # Metabolic cost of movement in watts/kg from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1 
-  E = 10.7*(mass/1000)^(-0.316)*speed + 6.03*(mass/1000)^(-0.303)
-  #Convert to kJ/s
-  E <- (E * (mass/1000))/1000
-  #Convert to calories/s
+  # Movement cost (cal/s)
+  E <- 10.7 * (mass / 1000)^(-0.316) * speed + 6.03 * (mass / 1000)^(-0.303)
+  #convert to kJ/s
+  E <- (E * (mass / 1000)) / 1000
+  #convert to cal/s
   E <- E * 239.005736
   
   num_movements <- sum(diff(IDs) != 0)
-  cost_move <- num_movements*E*interval 
+  move_cost <- num_movements * E * interval
+  cost_total <- BMR_cost + move_cost
   
-  cost_total <- BMR_cost + cost_move
+  # aDMI cap
+  aDMI_day <- mass^0.76
+  max_kg <- aDMI_day * (time_total / 86400)
+  cal_per_kg <- attr(habitat, "cal_per_kg")
+  max_cal <- max_kg * cal_per_kg
   
-  cal_net <- gain_total - cost_total
+  actual_gain <- min(gain_total, max_cal)*0.6 #digestive efficiency factor
+  cal_net <- actual_gain - cost_total
   
-  return(cal_net)
+  return(list(cal_net = cal_net, cal_max = max_cal))
+  
 }
 
 #----------------------------------------------------------------------
@@ -357,13 +363,15 @@ prey.fitness <- function(mass,
   
   #update weight
   #let weight_gain (g) = calorie surplus (kcal) / energy cost of tissue (kcal/g)
-  #estimate value for cost from Waterlow et al. (1981)
-  weight.gain <- cal_net / 20
-  mass.update <- mass+weight.gain
+  cal_net[cal_net < 0] <- 0 #prevent negative
+  growth_cal <- cal_net*0.8 #allocation to soma
+  repro_cal <- cal_net*0.2 #allocation to reproduction
   
-  #reproductive buffer, can use litter mass as a proxy, therefore
-  #m_litter = 0.637 * mass^0.778 from Huijsmans et al. (2024)
-  W_R <- 0.637*(mass.update^0.778) 
+  weight.gain <- growth_cal / 15
+  mass.update <- mass + weight.gain
+  
+  #using mass allocated to reproduction to determine W_R
+  W_R <- repro_cal / 15
 
   #birth weight via allometric scaling in mammals (Blueweiss et al. 1978)
   #wet weight $\approx$ 0.75 total weight, therefore dry mass $\approx$ 0.25 (Fusch et al. 1999)
