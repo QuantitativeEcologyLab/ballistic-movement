@@ -15,7 +15,7 @@ library(raster)
 library(terra)
 
 #----------------------------------------------------------------------
-# Calculate the euclidean distance between two points
+# Calculate the euclidean distance between two points----
 #----------------------------------------------------------------------
 
 SLD <- function(x_1, y_1, x_2, y_2){
@@ -23,7 +23,7 @@ SLD <- function(x_1, y_1, x_2, y_2){
 }
 
 #----------------------------------------------------------------------
-# Generate prey movement model based on prey mass (in g)
+# Generate prey movement model based on prey mass (in g)----
 #----------------------------------------------------------------------
 
 # Model comes from Noonan et al. 2020  https://doi.org/10.1111/cobi.13495
@@ -63,7 +63,7 @@ prey.mod <- function(mass, mu = c(0,0), variance = FALSE){
 }
 
 #----------------------------------------------------------------------
-# Generate prey var[position] based on mass (in g)
+# Generate prey var[position] based on mass (in g)----
 #----------------------------------------------------------------------
 
 # Model comes from Noonan et al. 2020  https://doi.org/10.1111/cobi.13495
@@ -82,7 +82,7 @@ prey.SIG <- function(mass, variance = FALSE) {
 }
 
 #----------------------------------------------------------------------
-# Generate prey E[tau_p] based on mass (in g)
+# Generate prey E[tau_p] based on mass (in g)----
 #----------------------------------------------------------------------
 
 # Model comes from Noonan et al. 2020  https://doi.org/10.1111/cobi.13495
@@ -99,7 +99,7 @@ prey.tau_p <- function(mass, variance = FALSE) {
 }
 
 #----------------------------------------------------------------------
-# Generate prey E[tau_v] based on mass (in g)
+# Generate prey E[tau_v] based on mass (in g)----
 #----------------------------------------------------------------------
 
 # Model comes from Noonan et al. 2020  https://doi.org/10.1111/cobi.13495
@@ -116,7 +116,7 @@ prey.tau_v <- function(mass, variance = FALSE) {
 }
 
 #----------------------------------------------------------------------
-# Generate predator var[position] based on mass (in g)
+# Generate predator var[position] based on mass (in g)----
 #----------------------------------------------------------------------
 
 # Model comes from Noonan et al. 2020  https://doi.org/10.1111/cobi.13495
@@ -136,7 +136,7 @@ pred.SIG <- function(mass, variance = FALSE) {
 
 
 #----------------------------------------------------------------------
-# Generate predator E[tau_p] based on mass (in g)
+# Generate predator E[tau_p] based on mass (in g)----
 #----------------------------------------------------------------------
 
 # Model comes from Noonan et al. 2020  https://doi.org/10.1111/cobi.13495
@@ -153,7 +153,7 @@ pred.tau_p <- function(mass, variance = FALSE) {
 }
 
 #----------------------------------------------------------------------
-# Generate predator E[tau_v] based on mass (in g)
+# Generate predator E[tau_v] based on mass (in g)----
 #----------------------------------------------------------------------
 
 # Model comes from Noonan et al. 2020  https://doi.org/10.1111/cobi.13495
@@ -169,7 +169,7 @@ pred.tau_v <- function(mass, variance = FALSE) {
   return(tau_v)
 }
 #----------------------------------------------------------------------
-# Generate E[mass_prey] based on mass_pred (in g)
+# Generate E[mass_prey] based on mass_pred (in g)----
 #----------------------------------------------------------------------
 
 # Model comes from Tucker & Rogers 2014  https://doi.org/10.1371/journal.pone.0106402
@@ -190,30 +190,30 @@ prey.mass <- function(mass, variance = FALSE) {
 }
 
 #----------------------------------------------------------------------
-# Generate raster of food patches based on mass_prey (g)
+# Generate raster of food patches based on mass_prey (g)----
 #----------------------------------------------------------------------
 
 createFoodRaster <- function(mass, width = 20, pred = FALSE, 
                              calories = 2125, #kcal/kg
                              dry_biomass = 1, #kg/m^2 
                              heterogeneity = FALSE) {
-  
-  #note that biomass must be DRY biomass, not absolute biomass
-  #can use 0.3*biomass as a proxy
-  # var[position]
+
+  #var[position]
   if(pred){SIG <- pred.SIG(mass)} else{
     SIG <- prey.SIG(mass)}
   
-  # Range of raster based on 99.9% HR area
+  #range of raster based on 99.9% HR area
   EXT <- round(sqrt((-2*log(0.0001)*pi)* SIG))
+  
   #number of patches based on fixed patch width
   N <- ceiling(2*EXT/width)
  
+  #create raster with terra
   biomass_raster <- rast(ncol = N, nrow = N,
                          xmin = -EXT, xmax = EXT,
                          ymin = -EXT, ymax = EXT)
   
-  # Biomass raster (kg dry matter per patch)
+  #assign biomass values to raster
   if (heterogeneity) {
     values(biomass_raster) <- runif(ncell(biomass_raster), 
                                     min = 0.1, max = 1.5) * dry_biomass*width^2  # kg/m²
@@ -221,16 +221,20 @@ createFoodRaster <- function(mass, width = 20, pred = FALSE,
     values(biomass_raster) <- dry_biomass*width^2
   }
   
+  #assign calorie values to raster by convert biomass
   calorie_raster <- biomass_raster * calories
+  
+  #assign attributes
   attr(calorie_raster, "biomass") <- biomass_raster
   attr(calorie_raster, "cal_per_kg") <- calories
   
+  #return calorie raster
   return(calorie_raster)
 }
 
 
 #----------------------------------------------------------------------
-# Count the number of patches visited (assumes immediate renewal)
+# Count the number of patches visited (assumes immediate renewal)----
 #----------------------------------------------------------------------
 
 grazing <- function(track, habitat, metric = "ids") {
@@ -238,15 +242,16 @@ grazing <- function(track, habitat, metric = "ids") {
   #convert track to data frame
   coords <- data.frame(x = track$x, y = track$y)
   
-  #Patch identities
+  #patch identities
   IDs <- cellFromXY(habitat, coords)
   
-  # Count the number of times it moved to a new food patch
+  #count the number of times it moved to a new food patch
   PATCHES <- sum(diff(IDs) != 0)
   
-  #Mean time between patches 
+  #mean time between patches 
   TIME <- mean(rle(c(FALSE, diff(IDs) != 0))$lengths)
   
+  #return values
   if(metric == "patches"){return(PATCHES)}
   if(metric == "time"){return(TIME)}
   if(metric == "ids") {return(IDs)}
@@ -254,78 +259,33 @@ grazing <- function(track, habitat, metric = "ids") {
 }
 
 #----------------------------------------------------------------------
-# calculate speed
+# extract speed----
 #----------------------------------------------------------------------
 
 speed_val <- function(models){
-  # Extract movement speeds from the models
+  #extract movement speeds from the models
   model_summary <- summary(models, units = FALSE)
   
-  # Ensure model_summary has $CI before accessing
+  #ensure model_summary has $CI before accessing
   if(!is.null(model_summary$CI) && nrow(model_summary$CI) == 5){
     SPEED <- model_summary$CI[4, "est"]
   } else {
     SPEED <- Inf
   }
+  
+  #return speed
   return(SPEED)
 }
 
 #----------------------------------------------------------------------
-# net benefits attempt
-#----------------------------------------------------------------------
-
-cals_net <- function(IDs, habitat, mass, models, speed, interval){
-  
-  patch_values <- values(habitat)[IDs]
-  gain_total <- sum(patch_values, na.rm = TRUE)
-  
-  # Metabolic rate (kj/day) from Nagy 1897 https://doi.org/10.2307/1942620
-  BMR <- 0.774 + 0.727 * log10(mass)
-  # backtransform
-  BMR <- 10^BMR
-  #convert to cal/s
-  BMR <- (BMR * 239.005736) / 86400
-  
-  # Time window
-  lifespan <- (4.88 * mass^0.153) * 31536000 #years to seconds
-  time_total <- lifespan * 0.001 # 1/1000 of a lifespan
-  
-  BMR_cost <- BMR * time_total
-  
-  # Movement cost (cal/s)
-  E <- 10.7 * (mass / 1000)^(-0.316) * speed + 6.03 * (mass / 1000)^(-0.303)
-  #convert to kJ/s
-  E <- (E * (mass / 1000)) / 1000
-  #convert to cal/s
-  E <- E * 239.005736
-  
-  num_movements <- sum(diff(IDs) != 0)
-  move_cost <- num_movements * E * interval
-  cost_total <- BMR_cost + move_cost
-  
-  # aDMI cap
-  aDMI_day <- mass^0.76
-  max_kg <- aDMI_day * (time_total / 86400)
-  cal_per_kg <- attr(habitat, "cal_per_kg")
-  max_cal <- max_kg * cal_per_kg
-  
-  actual_gain <- min(gain_total, max_cal)*0.6 #digestive efficiency factor
-  cal_net <- actual_gain - cost_total
-  
-  return(list(cal_net = cal_net, cal_max = max_cal))
-  
-}
-
-#----------------------------------------------------------------------
-# define "lifespan" and sampling interval
+# define "lifespan" and sampling interval----
 #----------------------------------------------------------------------
 
 #sampling function with lifespan scaled to body mass
 
 sampling <- function(mass, metric = "t") {
   
-  #calculate lifespan in seconds
-  #de Magalhaes et al (2008) 
+  #calculate lifespan in seconds from de Magalhaes et al (2008) https://doi.org/10.1093/gerona/62.2.149
   lifespan <- (4.88*mass^0.153) * 31536000 # years to seconds
   lifespan_int <- lifespan * 0.001 # 1/1000 of a lifespan
   
@@ -344,9 +304,73 @@ sampling <- function(mass, metric = "t") {
   stop("Invalid metric. Use 't' or 'offspring' or 'lifespan'.")
 }
 
+#----------------------------------------------------------------------
+# net calories from grazing----
+#----------------------------------------------------------------------
+
+cals_net <- function(IDs, habitat, mass, models, speed, interval){
+  
+  #extract calorie values from which the movement track overlaps
+  patch_values <- values(habitat)[IDs]
+  
+  #assign the sum of calorie values as the gross_gain
+  cal_gross <- sum(patch_values, na.rm = TRUE)
+  
+  #metabolic rate (kj/day) from Nagy 1987 https://doi.org/10.2307/1942620
+  BMR <- 0.774 + 0.727 * log10(mass)
+  #back transform
+  BMR <- 10^BMR
+  #convert to cal/s
+  BMR <- (BMR * 239.005736) / 86400
+  
+  #time window
+  lifespan <- (4.88 * mass^0.153) * 31536000 #years to seconds
+  time_total <- lifespan * 0.001 # 1/1000 of a lifespan
+  
+  #calculate total BMR cost over sample period 
+  BMR_cost <- BMR * time_total
+  
+  #calculate movement cost (watts/kg) from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1
+  E <- 10.7 * (mass / 1000)^(-0.316) * speed + 6.03 * (mass / 1000)^(-0.303)
+  #convert to kJ/s
+  E <- (E * mass/1000)/1000
+  #convert to cal/s
+  E <- E * 239.005736
+  
+  #extract number of movements made
+  num_movements <- sum(diff(IDs) != 0)
+  
+  #calculate total movement costs
+  move_cost <- num_movements * E * interval #prey.tau_p(mass) instead of prey.tau_v(mass)?
+  
+  #calculate total energetic costs
+  cost_total <- BMR_cost + move_cost
+  
+  #calculate absolute Daily Mass Intake (aDMI) in kg/day
+  #scaled to body mass from Clauss eet al. 2007 https://doi.org/10.1016/j.cbpa.2007.05.024
+  aDMI_day <- mass^0.76
+  
+  #convert to kg
+  max_kg <- aDMI_day * (time_total / 86400)
+  
+  #assign cal_per_kg from food raster
+  cal_per_kg <- attr(habitat, "cal_per_kg")
+  
+  #calculate max calories, converting from kg to calories
+  max_cal <- max_kg * cal_per_kg
+  
+  #calculate actual gain with intake cap and digestive efficiency
+  actual_gain <- min(gain_total, max_cal)*0.6 #digestive efficiency factor
+  
+  #assign net calories
+  cal_net <- actual_gain - cost_total
+  
+  #return cal_net and cal_max
+  return(list(cal_net = cal_net, cal_max = max_cal))
+}
 
 #----------------------------------------------------------------------
-# Prey fitness function 
+# Prey fitness function----
 #----------------------------------------------------------------------
 
 #calculate fitness 
@@ -354,15 +378,10 @@ prey.fitness <- function(mass,
                          cal_net,
                          costs = NULL) 
 {
-  
-  #DEBkiss model: Jager T (2024). DEBkiss. A simple framework for animal energy budgets. 
-  #Version 3.1. Leanpub: https://leanpub.com/debkiss_book.
-  
-  # Standardize mass input
+  #standardize mass input
   if (length(mass) == 1) mass <- rep(mass, n_prey)
   
   #update weight
-  #let weight_gain (g) = calorie surplus (kcal) / energy cost of tissue (kcal/g)
   cal_net[cal_net < 0] <- 0 #prevent negative
   growth_cal <- cal_net*0.8 #allocation to soma
   repro_cal <- cal_net*0.2 #allocation to reproduction
@@ -373,11 +392,12 @@ prey.fitness <- function(mass,
   #using mass allocated to reproduction to determine W_R
   W_R <- repro_cal / 15
 
-  #birth weight via allometric scaling in mammals (Blueweiss et al. 1978)
-  #wet weight $\approx$ 0.75 total weight, therefore dry mass $\approx$ 0.25 (Fusch et al. 1999)
+  #birth weight via allometric scaling in mammals from Blueweiss et al. 1978 https://doi.org/10.1007/BF00344996
+  #wet weight $\approx$ 0.75 total weight
+  ##therefore dry mass $\approx$ 0.25 from Fusch et al. 1999 https://doi.org/10.1203/00006450-199910000-00018
   W_B0 <- 0.25*(0.097*mass.update^(0.92))
   
-  #total offspring scaled to functional response
+  #total offspring based on updated mass
   offspring <- floor(W_R/W_B0) 
  
   #set offspring to 0 is cal_net <= 0
@@ -390,7 +410,7 @@ prey.fitness <- function(mass,
   }
   
   #clamp minimum offspring to 0
-  offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #Clamp the minimum to 0
+  offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #clamp the minimum to 0
   
   return(list(offspring = offspring, mass_update = mass.update))
 }

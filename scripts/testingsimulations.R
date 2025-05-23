@@ -19,11 +19,8 @@ library(patchwork)
 source("functions.R")
 
 #----------------------------------------------------------------------
-# run the simulation
+# run the simulation----
 #----------------------------------------------------------------------
-
-# Predator mass (g)
-mass_pred <- 5000
 
 # Prey mass (g)
 mass_prey <- 1000
@@ -32,17 +29,14 @@ mass_prey <- 1000
 t <- sampling(mass_prey)
 interval <- sampling(mass_prey, metric = "interval")
 
-#energetic value of a patch
-CALS <- ((10^(0.774 + 0.727*log10(mass_prey)))^1.22)/150
-
 #number of individuals in arena
 n_prey <- 10
 
 #number of arenas
-REPS <- 3
+REPS <- 5
 
 #number of generations
-GENS <- 100
+GENS <- 300
 
 #build food raster
 FOOD <- createFoodRaster(mass_prey)
@@ -107,21 +101,25 @@ for(G in 1:GENS) {
       PREY_tracks[[i]] <- simulate(PREY_mods[[i]], t = t)
     }
     
+    #extract ids of patches entered
     benefits_prey <- vector("list", n_prey)
     for(i in 1:n_prey){
       benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD, metric = "ids")
     }
     
+    #extract number of changes between patches
     patches <- vector("list", n_prey)
     for(i in 1:n_prey){
       patches[[i]] <- grazing(PREY_tracks[[i]], FOOD, metric = "patches")
     }
     
+    #extract speed from model
     speed <- numeric(n_prey)
     for(i in 1:n_prey){
       speed[[i]] <- speed_val(models = PREY_mods[[i]])
     }
     
+    #assign net calories to each individual
     cal_list <- vector("list", n_prey)
     cal_net <- numeric(n_prey)
     cal_max <- numeric(n_prey)
@@ -148,7 +146,7 @@ for(G in 1:GENS) {
       }
     }
     
-    
+    #compute prey offspring
     results <- prey.fitness(mass = mass_prey,
                             cal_net = cal_net)
     
@@ -207,15 +205,32 @@ for(G in 1:GENS) {
                     rep(prey[i,"sig"], prey[i,"offspring"]))
       
     } #Closes the if statement
+    
+    # If no offspring, save results and stop simulation
+    if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
+      warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
+      
+      save(prey_res, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_1000g_prey_res.Rda')
+      save(prey_details, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_1000g_prey_details.Rda')
+      
+      break
+    }
   }
+  
+  #Save prey results
+  save(prey_res, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_1000g_prey_res.Rda')
+  save(prey_details, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_1000g_prey_details.Rda')
+  
+  #progress report
   print(G)
 }
+
 
 print(prey_res)
 print(prey_details)
 
 #----------------------------------------------------------------------
-# make diagnostic figures
+# make diagnostic figures----
 #----------------------------------------------------------------------
 
 #make data sets compatible
@@ -262,6 +277,16 @@ offspring.lv <- ggplot(prey_details_df, aes(x = lv, y = offspring)) +
   theme_minimal()
 
 print(offspring.lv)
+
+# mass ~ gen
+mass.gen <- ggplot(prey_details_df, aes(x = generation, y = mass_update)) +
+  geom_line(color = "red", linewidth = 1) +
+  labs(
+    y = "mass_updated",
+    x = "generation") +
+  theme_minimal()
+
+print(mass.gen)
 
 # number of patches ~ lv
 patches.lv <- ggplot(prey_details_df, aes(x = lv, y = patches)) +
@@ -383,7 +408,6 @@ move <- ggplot() +
 print(move)
 
 #final plot
-
 plots <- list(rel.lv.gen,
               cal.lv, 
               offspring.lv, 
@@ -394,7 +418,8 @@ plots <- list(rel.lv.gen,
               speed.gen,
               offspring.cal, 
               offspring.mass,
-              offspring.speed,   
+              offspring.speed, 
+              mass.gen,
               tauv.gen, 
               taup.gen)
 
@@ -436,7 +461,7 @@ if(length(unique(AGG$offspring)) > 1) {
          col = adjustcolor("blue", alpha = 0.8))
   
   # Add fitted curve only if FIT exists
-  lines(x, y, col = "red", lwd = 2)
+  lines(x, y, col = "steelblue", lwd = 2)
   
 } else {
   # No variation: just plot raw and aggregated data
