@@ -19,33 +19,40 @@ library(patchwork)
 source("functions.R")
 
 #----------------------------------------------------------------------
-# run the simulation----
+# set up global parameters----
 #----------------------------------------------------------------------
 
+#predator mass (g)
+mass_pred <- 20000
+
 # Prey mass (g)
-mass_prey <- 1000
+mass_prey <- 5000
 
 #set sampling interval and lifespan
 t <- sampling(mass_prey)
 interval <- sampling(mass_prey, metric = "interval")
 
 #number of individuals in arena
-n_prey <- 10
+n_prey <- 5
 
 #number of arenas
-REPS <- 5
+REPS <- 2
 
 #number of generations
-GENS <- 300
+GENS <- 500
 
 #build food raster
-FOOD <- createFoodRaster(mass_prey)
+FOOD <- createFoodRaster(mass_prey, patch_width = 35)
 plot(FOOD, col = "steelblue")
 grid(nx = ncol(FOOD), ny = nrow(FOOD), col = "black", lty = "dotted")
 
 #lists for storing results
 prey_res <- list()
 prey_details <- list()
+
+#----------------------------------------------------------------------
+# run the simulation----
+#----------------------------------------------------------------------
 
 for(G in 1:GENS) {
   
@@ -194,7 +201,7 @@ for(G in 1:GENS) {
   PREY_tau_v <- vector()
   PREY_sig <- vector()
   for(i in 1:nrow(prey)){
-    if(prey[i,"offspring"] >0){
+    if(prey[i,"offspring"] > 0){
       PREY_tau_p <- c(PREY_tau_p,
                       rep(prey[i,"tau_p"], prey[i,"offspring"]))
       
@@ -210,21 +217,20 @@ for(G in 1:GENS) {
     if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
       warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
       
-      save(prey_res, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_1000g_prey_res.Rda')
-      save(prey_details, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_1000g_prey_details.Rda')
+      save(prey_res, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_5000g_prey_res2.Rda')
+      save(prey_details, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_5000g_prey_details2.Rda')
       
       break
     }
   }
   
   #Save prey results
-  save(prey_res, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_1000g_prey_res.Rda')
-  save(prey_details, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_1000g_prey_details.Rda')
+  save(prey_res, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_5000g_prey_res2.Rda')
+  save(prey_details, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_5000g_prey_details2.Rda')
   
   #progress report
   print(G)
 }
-
 
 print(prey_res)
 print(prey_details)
@@ -363,7 +369,7 @@ speed.gen <- ggplot(prey_details_df, aes(x = generation, y = speed)) +
   stat_summary(fun = mean, geom = "line", col = "red", linewidth = 1)+
   labs(
     y = "speed",
-    x = "gen") +
+    x = "generation") +
   theme_minimal()
 
 print(speed.gen)
@@ -373,7 +379,7 @@ tauv.gen <- ggplot(prey_details_df, aes(x = generation, y = tau_v)) +
   stat_summary(fun = mean, geom = "line", col = "red", linewidth = 1)+
   labs(
     y = "tau_v",
-    x = "gen") +
+    x = "generation") +
   theme_minimal()
 
 print(tauv.gen)
@@ -383,7 +389,7 @@ taup.gen <- ggplot(prey_details_df, aes(x = generation, y = tau_p)) +
   stat_summary(fun = mean, geom = "line", col = "red", linewidth = 1)+
   labs(
     y = "tau_p",
-    x = "gen") +
+    x = "generation") +
   theme_minimal()
 
 print(taup.gen)

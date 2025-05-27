@@ -4,7 +4,7 @@
 
 #Written by Michael Noonan and Lynndsay Terpsma
 
-#Last updated: May 20th 2025
+#Last updated: May 26th 2025
 
 
 #----------------------------------------------------------------------
@@ -193,7 +193,7 @@ prey.mass <- function(mass, variance = FALSE) {
 # Generate raster of food patches based on mass_prey (g)----
 #----------------------------------------------------------------------
 
-createFoodRaster <- function(mass, width = 20, pred = FALSE, 
+createFoodRaster <- function(mass, patch_width = 20, pred = FALSE, 
                              calories = 2125, #kcal/kg
                              dry_biomass = 1, #kg/m^2 
                              heterogeneity = FALSE) {
@@ -206,7 +206,7 @@ createFoodRaster <- function(mass, width = 20, pred = FALSE,
   EXT <- round(sqrt((-2*log(0.0001)*pi)* SIG))
   
   #number of patches based on fixed patch width
-  N <- ceiling(2*EXT/width)
+  N <- ceiling(2*EXT/patch_width)
  
   #create raster with terra
   biomass_raster <- rast(ncol = N, nrow = N,
@@ -215,18 +215,20 @@ createFoodRaster <- function(mass, width = 20, pred = FALSE,
   
   #assign biomass values to raster
   if (heterogeneity) {
-    values(biomass_raster) <- runif(ncell(biomass_raster), 
-                                    min = 0.1, max = 1.5) * dry_biomass*width^2  # kg/m²
+    terra::values(biomass_raster) <- runif(ncell(biomass_raster), 
+                                    min = 0.1, max = 1.5) * dry_biomass(patch_width^2)  # kg/m²
   } else {
-    values(biomass_raster) <- dry_biomass*width^2
+    terra::values(biomass_raster) <- rep(dry_biomass*(patch_width^2), ncell(biomass_raster))
   }
   
   #assign calorie values to raster by convert biomass
   calorie_raster <- biomass_raster * calories
   
   #assign attributes
-  attr(calorie_raster, "biomass") <- biomass_raster
+  attr(calorie_raster, "biomass_raster") <- biomass_raster
+  attr(calorie_raster, "biomass_kg_per_m2") <- dry_biomass
   attr(calorie_raster, "cal_per_kg") <- calories
+  attr(calorie_raster, "patch_width") <- patch_width
   
   #return calorie raster
   return(calorie_raster)
@@ -360,7 +362,7 @@ cals_net <- function(IDs, habitat, mass, models, speed, interval){
   max_cal <- max_kg * cal_per_kg
   
   #calculate actual gain with intake cap and digestive efficiency
-  actual_gain <- min(gain_total, max_cal)*0.6 #digestive efficiency factor
+  actual_gain <- min(cal_gross, max_cal)*0.6 #digestive efficiency factor
   
   #assign net calories
   cal_net <- actual_gain - cost_total
