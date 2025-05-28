@@ -268,6 +268,7 @@ save(all_results, file = "~/ballisticmovement/ballistic-movement/sim_results/res
 
 all_results_df <- bind_rows(all_results)
 
+save(all_results_df, file = "~/ballisticmovement/ballistic-movement/sim_results/sensitivity_analysis_of_offspring_production_df.Rda")
 
 # --- Summary Tables ----
 
@@ -284,30 +285,8 @@ summary_table <- all_results_df %>%
 
 print(summary_table)
 
-# 2. Overview: mean offspring by mass (collapsed across others)
-mass_effects <- all_results_df %>%
-  group_by(mass) %>%
-  summarise(
-    mean_offspring = mean(offspring, na.rm = TRUE),
-    sd_offspring = sd(offspring, na.rm = TRUE),
-    prop_extinct = mean(offspring == 0, na.rm = TRUE),
-    .groups = "drop"
-  )
-
-print(mass_effects)
-
-# 3. Plot: Mean offspring by mass (with error bars)
-mass.off <- ggplot(mass_effects, aes(x = mass, y = mean_offspring)) +
-  geom_point(size = 3) +
-  geom_errorbar(aes(ymin = mean_offspring - sd_offspring,
-                    ymax = mean_offspring + sd_offspring), width = 100) +
-  theme_minimal() +
-  labs(title = "Mean Offspring by Mass",
-       y = "Mean Offspring", x = "Initial Mass")
-print(mass.off)
-
-# 4. Heatmap (3D slicing): Calories vs Patch Width per Mass bin
-heat <- ggplot(all_results_df, aes(x = factor(patch_width), y = factor(calories), fill = offspring)) +
+# calories vs patch width
+ggplot(all_results_df, aes(x = factor(patch_width), y = factor(calories), fill = offspring)) +
   geom_tile() +
   facet_wrap(~ mass, ncol = 2) +
   scale_fill_viridis_c() +
@@ -315,102 +294,47 @@ heat <- ggplot(all_results_df, aes(x = factor(patch_width), y = factor(calories)
        x = "Patch Width", y = "Calories") +
   theme_minimal()
 
-# 5. Optional: 4D interaction plot using facets (collapsed by biomass)
-interaction <- ggplot(all_results_df, aes(x = biomass, y = offspring)) +
+# 4D interaction plot using facets (collapsed by biomass)
+ggplot(all_results_df, aes(x = biomass, y = offspring)) +
   geom_jitter(alpha = 0.3) +
   geom_smooth(method = "loess", se = FALSE) +
   facet_grid(mass ~ calories, labeller = label_both) +
   theme_minimal() +
   labs(title = "Offspring by Biomass across Mass & Calories",
        y = "Offspring", x = "Biomass")
-print(interaction)
 
-# 6. run linear model to data
-lm_model <- lm(offspring ~ patch_width + biomass + calories + mass, data = all_results_df)
-summary(lm_model)
+# non parametric look at calories
+ggplot(all_results_df, aes(x = calories, y = offspring, color = factor(mass))) +
+  geom_point(alpha = 0.3) + 
+  geom_smooth(method = "loess", se = FALSE) +
+  facet_wrap(~ mass)
 
-lm <- ggplot(all_results_df, aes(x = calories, y = offspring, color = as.factor(mass))) +
-  geom_point(alpha = 0.5) +
-  geom_smooth(method = "lm") +
-  facet_grid(biomass ~ patch_width) +
-  theme_minimal()
+# non parametric look at patch_width
+ggplot(all_results_df, aes(x = patch_width, y = offspring, color = factor(mass))) +
+  geom_point(alpha = 0.3) + 
+  geom_smooth(method = "loess", se = FALSE) +
+  facet_wrap(~ mass)
 
-print(lm)
+# non parametric look at bbiomass
+ggplot(all_results_df, aes(x = biomass, y = offspring, color = factor(mass))) +
+  geom_point(alpha = 0.3) + 
+  geom_smooth(method = "loess", se = FALSE) +
+  facet_wrap(~ mass)
 
-sens.plots <- list(mass.off,
-              heat,
-              interaction,
-              lm)
+# random forest
+rf <- randomForest(offspring ~ patch_width + biomass + calories + mass, data = all_results_df)
+importance(rf)
 
-final.sens.plot <- wrap_plots(sens.plots, ncol = 2)
-print(final.sens.plot)
+#width partial plot
+partialPlot(rf, all_results_df, patch_width)
 
-# Random Forest for non-linear effects (requires 'randomForest' package)
-library(randomForest)
-rf_fit <- randomForest(offspring ~ patch_width + biomass + calories, data = all_results_df)
-print(rf_fit)
+#calories partial plot
+partialPlot(rf, all_results_df, calories)
 
-# more analysis of sensitivity
+#biomass partial plot
+partialPlot(rf, all_results_df, biomass)
 
-# Load required packages
-library(ggplot2)
-library(dplyr)
-library(tidyr)
-library(car)
-library(patchwork)  # for combining plots
-library(MASS)       # for stepwise selection
-
-# Basic checks on multicollinearity and model quality
-lm_model <- lm(offspring ~ patch_width + biomass + calories + mass, data = all_results_df)
-summary(lm_model)
-car::vif(lm_model)  # check variance inflation factors
-
-# Interaction model
-lm_int <- lm(offspring ~ (patch_width + biomass + calories) * mass, data = all_results_df)
-summary(lm_int)
-
-# Stepwise model selection to reduce complexity
-step_model <- MASS::stepAIC(lm_int, direction = "both")
-summary(step_model)
-
-# Plot response surfaces: calories vs patch_width for various masses
-mass_vals <- unique(all_results_df$mass)
-mass_vals <- sort(mass_vals)
-
-plots <- lapply(mass_vals, function(m) {
-  df_sub <- all_results_df %>% filter(mass == m)
-  ggplot(df_sub, aes(x = calories, y = patch_width, fill = offspring)) +
-    geom_tile() +
-    scale_fill_viridis_c() +
-    labs(title = paste("Mass:", m), x = "Calories", y = "Patch Width", fill = "Offspring") +
-    theme_minimal()
-})
-
-# Combine all plots into one grid for comparison
-wrap_plots(plots)
-
-# Aggregate offspring by scenario for robustness metric
-robust_summary <- all_results_df %>%
-  group_by(patch_width, biomass, calories) %>%
-  summarise(
-    avg_offspring = mean(offspring),
-    min_offspring = min(offspring),
-    max_offspring = max(offspring),
-    prop_success = mean(offspring > 0),
-    .groups = 'drop'
-  ) %>%
-  arrange(desc(prop_success), desc(avg_offspring))
-
-# Plot robustness heatmap
-robust_plot <- ggplot(robust_summary, aes(x = calories, y = patch_width, fill = prop_success)) +
-  geom_tile() +
-  scale_fill_viridis_c() +
-  labs(title = "Proportion of Successful Simulations", x = "Calories", y = "Patch Width", fill = "Prop. Success") +
-  theme_minimal()
-
-robust_plot
-
-# Optional: Export the top parameter sets
+# Export the top parameter sets
 best_sets <- robust_summary %>% filter(prop_success == 1)
 write.csv(best_sets, "best_parameter_sets.csv", row.names = FALSE)
 
