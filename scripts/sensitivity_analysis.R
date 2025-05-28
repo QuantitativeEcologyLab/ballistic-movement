@@ -32,6 +32,10 @@ run_simulation <- function(mass_prey,
                                   calories,
                                   save_prefix) {
   
+  #generate sampling interval 
+  t <- sampling(mass_prey)
+  interval <- sampling(mass_prey, metric = "interval")
+  
   # Create or load FOOD raster based on parameters
   FOOD <- createFoodRaster(mass_prey, 
                            patch_width = patch_width, 
@@ -194,7 +198,7 @@ run_simulation <- function(mass_prey,
     }
     
     # Save results each generation to disk
-    save(prey_res, file = paste0(save_prefix, "_res.Rda"))
+    save(prey_res, file = paste0(save_prefix, "_res.Rda")) #delete this line
     save(prey_details, file = paste0(save_prefix, "_details.Rda"))
     
     cat("Completed generation", G, "\n")
@@ -204,31 +208,27 @@ run_simulation <- function(mass_prey,
 
 
 #-------------------------------------------------------------------------------
-# create sensitivity analysis
+# create sensitivity analysis----
 #-------------------------------------------------------------------------------
 
 #------------------------------#
 #    Static Simulation Params  #
 #------------------------------#
 
-#set sampling interval and lifespan
-t <- sampling(mass_prey)
-interval <- sampling(mass_prey, metric = "interval")
-
 #number of individuals in arena
 n_prey <- 5
 
 #number of arenas
-REPS <- 5
+REPS <- 3
 
 #number of generations
-GENS <- 10
+GENS <- 5
 
 
 # Define your parameter combinations here
 param_grid <- expand.grid(
   mass_prey = seq(2000, 10000, 2000),
-  patch_width = seq(10, 100, 10),
+  patch_width = seq(10, 60, 10),
   biomass = seq(1, 15, 3),
   calories = seq(1000, 4000, 500) 
 )
@@ -241,7 +241,7 @@ tic(paste("Scenario", i))
   params <- param_grid[i, ]
   
   cat("\n--- Running scenario", i, "of", nrow(param_grid), "---\n")
-  cat(sprintf("Width: %d, Biomass: %.1f, Calories: %d\n", params$patch_width, params$biomass, params$calories))
+  cat(sprintf("Width: %d, Biomass: %d, Calories: %d, Mass: %d\n", params$patch_width, params$biomass, params$calories, params$mass_prey))
   
   # Construct a prefix for saving files so each scenario saves to unique files
   save_prefix <- paste0("~/ballisticmovement/ballistic-movement/sim_results/sensitivity",
@@ -264,39 +264,156 @@ tic(paste("Scenario", i))
   toc(log = TRUE)
 }
 
-
+save(all_results, file = "~/ballisticmovement/ballistic-movement/sim_results/results_df.Rda")
 
 all_results_df <- bind_rows(all_results)
 
 
-# Summarize mean and variance of 'lv' over generations per scenario
-summary_results <- all_results_df %>%
-  group_by(patch_width, biomass, calories) %>%
-  summarise(
-    mean_off = mean(offspring, na.rm = TRUE),
-    var_off = var(offspring, na.rm = TRUE),
-    n_gens = n()
-  ) %>%
-  ungroup()
+# --- Summary Tables ----
 
-# Quick plot: effect of patch width on mean lv, faceted by biomass and calories
-ggplot(summary_results, aes(x = patch_width, y = mean_off)) +
-  geom_point() +
-  geom_line() +
-  facet_grid(biomass ~ calories) +
-  labs(title = "Mean offspring by patch width, biomass, and calories",
-       x = "Patch Width",
-       y = "Mean offspring") +
+# 1. Main summary table: mean offspring by mass, calories, biomass, patch_width
+summary_table <- all_results_df %>%
+  group_by(mass, calories, biomass, patch_width) %>%
+  summarise(
+    mean_offspring = mean(offspring, na.rm = TRUE),
+    sd_offspring = sd(offspring, na.rm = TRUE),
+    n = n(),
+    prop_extinct = mean(offspring == 0, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+print(summary_table)
+
+# 2. Overview: mean offspring by mass (collapsed across others)
+mass_effects <- all_results_df %>%
+  group_by(mass) %>%
+  summarise(
+    mean_offspring = mean(offspring, na.rm = TRUE),
+    sd_offspring = sd(offspring, na.rm = TRUE),
+    prop_extinct = mean(offspring == 0, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+print(mass_effects)
+
+# 3. Plot: Mean offspring by mass (with error bars)
+mass.off <- ggplot(mass_effects, aes(x = mass, y = mean_offspring)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_offspring - sd_offspring,
+                    ymax = mean_offspring + sd_offspring), width = 100) +
+  theme_minimal() +
+  labs(title = "Mean Offspring by Mass",
+       y = "Mean Offspring", x = "Initial Mass")
+print(mass.off)
+
+# 4. Heatmap (3D slicing): Calories vs Patch Width per Mass bin
+heat <- ggplot(all_results_df, aes(x = factor(patch_width), y = factor(calories), fill = offspring)) +
+  geom_tile() +
+  facet_wrap(~ mass, ncol = 2) +
+  scale_fill_viridis_c() +
+  labs(title = "Offspring by Patch Width and Calories per Mass",
+       x = "Patch Width", y = "Calories") +
   theme_minimal()
 
-# Optional: Simple linear model to test sensitivity
-lm_fit <- lm(mean_off ~ patch_width + biomass + calories, data = summary_results)
-summary(lm_fit)
+# 5. Optional: 4D interaction plot using facets (collapsed by biomass)
+interaction <- ggplot(all_results_df, aes(x = biomass, y = offspring)) +
+  geom_jitter(alpha = 0.3) +
+  geom_smooth(method = "loess", se = FALSE) +
+  facet_grid(mass ~ calories, labeller = label_both) +
+  theme_minimal() +
+  labs(title = "Offspring by Biomass across Mass & Calories",
+       y = "Offspring", x = "Biomass")
+print(interaction)
 
-# More advanced: Random Forest for non-linear effects (requires 'randomForest' package)
-# library(randomForest)
-# rf_fit <- randomForest(mean_lv ~ width + biomass + calories, data = summary_results)
-# print(rf_fit)
+# 6. run linear model to data
+lm_model <- lm(offspring ~ patch_width + biomass + calories + mass, data = all_results_df)
+summary(lm_model)
+
+lm <- ggplot(all_results_df, aes(x = calories, y = offspring, color = as.factor(mass))) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm") +
+  facet_grid(biomass ~ patch_width) +
+  theme_minimal()
+
+print(lm)
+
+sens.plots <- list(mass.off,
+              heat,
+              interaction,
+              lm)
+
+final.sens.plot <- wrap_plots(sens.plots, ncol = 2)
+print(final.sens.plot)
+
+# Random Forest for non-linear effects (requires 'randomForest' package)
+library(randomForest)
+rf_fit <- randomForest(offspring ~ patch_width + biomass + calories, data = all_results_df)
+print(rf_fit)
+
+# more analysis of sensitivity
+
+# Load required packages
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(car)
+library(patchwork)  # for combining plots
+library(MASS)       # for stepwise selection
+
+# Basic checks on multicollinearity and model quality
+lm_model <- lm(offspring ~ patch_width + biomass + calories + mass, data = all_results_df)
+summary(lm_model)
+car::vif(lm_model)  # check variance inflation factors
+
+# Interaction model
+lm_int <- lm(offspring ~ (patch_width + biomass + calories) * mass, data = all_results_df)
+summary(lm_int)
+
+# Stepwise model selection to reduce complexity
+step_model <- MASS::stepAIC(lm_int, direction = "both")
+summary(step_model)
+
+# Plot response surfaces: calories vs patch_width for various masses
+mass_vals <- unique(all_results_df$mass)
+mass_vals <- sort(mass_vals)
+
+plots <- lapply(mass_vals, function(m) {
+  df_sub <- all_results_df %>% filter(mass == m)
+  ggplot(df_sub, aes(x = calories, y = patch_width, fill = offspring)) +
+    geom_tile() +
+    scale_fill_viridis_c() +
+    labs(title = paste("Mass:", m), x = "Calories", y = "Patch Width", fill = "Offspring") +
+    theme_minimal()
+})
+
+# Combine all plots into one grid for comparison
+wrap_plots(plots)
+
+# Aggregate offspring by scenario for robustness metric
+robust_summary <- all_results_df %>%
+  group_by(patch_width, biomass, calories) %>%
+  summarise(
+    avg_offspring = mean(offspring),
+    min_offspring = min(offspring),
+    max_offspring = max(offspring),
+    prop_success = mean(offspring > 0),
+    .groups = 'drop'
+  ) %>%
+  arrange(desc(prop_success), desc(avg_offspring))
+
+# Plot robustness heatmap
+robust_plot <- ggplot(robust_summary, aes(x = calories, y = patch_width, fill = prop_success)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  labs(title = "Proportion of Successful Simulations", x = "Calories", y = "Patch Width", fill = "Prop. Success") +
+  theme_minimal()
+
+robust_plot
+
+# Optional: Export the top parameter sets
+best_sets <- robust_summary %>% filter(prop_success == 1)
+write.csv(best_sets, "best_parameter_sets.csv", row.names = FALSE)
+
 
 
 
