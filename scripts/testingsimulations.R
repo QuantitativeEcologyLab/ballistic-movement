@@ -14,6 +14,7 @@ library(ggplot2)
 library(dplyr)
 library(gridExtra)
 library(patchwork)
+library(tictoc)
 
 # Source the functions (ensure 'functions.R' is available in the working directory)
 source("functions.R")
@@ -23,10 +24,10 @@ source("functions.R")
 #----------------------------------------------------------------------
 
 #predator mass (g)
-mass_pred <- 20000
+mass_pred <- 1000
 
 # Prey mass (g)
-mass_prey <- 5000
+mass_prey <- 1000
 
 #set sampling interval and lifespan
 t <- sampling(mass_prey)
@@ -36,13 +37,13 @@ interval <- sampling(mass_prey, metric = "interval")
 n_prey <- 5
 
 #number of arenas
-REPS <- 2
+REPS <- 1
 
 #number of generations
-GENS <- 500
+GENS <- 25
 
 #build food raster
-FOOD <- createFoodRaster(mass_prey, patch_width = 35)
+FOOD <- createFoodRaster(mass_prey)
 plot(FOOD, col = "steelblue")
 grid(nx = ncol(FOOD), ny = nrow(FOOD), col = "black", lty = "dotted")
 
@@ -55,6 +56,7 @@ prey_details <- list()
 #----------------------------------------------------------------------
 
 for(G in 1:GENS) {
+  tic(paste("Generation", i))
   
   prey <- list()
   
@@ -137,8 +139,7 @@ for(G in 1:GENS) {
                                habitat = FOOD, 
                                mass = mass, 
                                models = PREY_mods[[i]],
-                               speed = speed[[i]],
-                               interval = interval)
+                               speed = speed[[i]])
       # Defensive: check result is valid
       if (is.list(cal_list[[i]]) &&
           all(c("cal_net", "cal_max") %in% names(cal_list[[i]]))) {
@@ -179,8 +180,8 @@ for(G in 1:GENS) {
                             sig = prey_SIGMA,
                             lv = prey_lvs,
                             patches = unlist(patches),
-                            cal = cal_net,
-                            cal_max = cal_max,
+                            kcal = cal_net,
+                            kcal_max = cal_max,
                             speed = unlist(speed),
                             offspring = unlist(offspring_prey),
                             mass = mass_prey,
@@ -230,6 +231,7 @@ for(G in 1:GENS) {
   
   #progress report
   print(G)
+  toc(log = TRUE)
 }
 
 print(prey_res)
@@ -325,7 +327,7 @@ offspring.cal <- ggplot(prey_details_df, aes(x = cal, y = offspring)) +
 print(offspring.cal)
 
 # offspring ~ mass
-offspring.mass <- ggplot(prey_details_df, aes(x = mass_update, y = offspring)) +
+offspring.mass <- ggplot(prey_details_df, aes(x = generation, y = mass)) +
   geom_line(color = "red", linewidth = 1) +
   labs(
     y = "offspring",
@@ -333,6 +335,12 @@ offspring.mass <- ggplot(prey_details_df, aes(x = mass_update, y = offspring)) +
   theme_minimal()
 
 print(offspring.mass)
+
+off.mass <- ggplot(prey_details_df, aes(x = mass, y = offspring)) +
+  geom_line(color = "red", linewidth = 1) +
+  theme_minimal()
+
+print(off.mass)
 
 # speed ~ mass
 speed.mass <- ggplot(prey_details_df, aes(x = mass_update, y = speed)) +

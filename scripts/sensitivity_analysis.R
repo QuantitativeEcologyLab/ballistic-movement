@@ -198,7 +198,6 @@ run_simulation <- function(mass_prey,
     }
     
     # Save results each generation to disk
-    save(prey_res, file = paste0(save_prefix, "_res.Rda")) #delete this line
     save(prey_details, file = paste0(save_prefix, "_details.Rda"))
     
     cat("Completed generation", G, "\n")

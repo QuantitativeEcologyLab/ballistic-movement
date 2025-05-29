@@ -193,9 +193,9 @@ prey.mass <- function(mass, variance = FALSE) {
 # Generate raster of food patches based on mass_prey (g)----
 #----------------------------------------------------------------------
 
-createFoodRaster <- function(mass, patch_width = 20, pred = FALSE, 
-                             calories = 2125, #kcal/kg
-                             dry_biomass = 1, #kg/m^2 
+createFoodRaster <- function(mass, pred = FALSE, patch_width = 20,
+                             calories = 6000, #kcal/kg
+                             dry_biomass = 5, #kg/m^2 
                              heterogeneity = FALSE) {
 
   #var[position]
@@ -213,12 +213,14 @@ createFoodRaster <- function(mass, patch_width = 20, pred = FALSE,
                          xmin = -EXT, xmax = EXT,
                          ymin = -EXT, ymax = EXT)
   
+  cell_area <- res(biomass_raster)[1]^2
+  
   #assign biomass values to raster
   if (heterogeneity) {
-    terra::values(biomass_raster) <- runif(ncell(biomass_raster), 
-                                    min = 0.1, max = 1.5) * dry_biomass(patch_width^2)  # kg/m²
+    biomass_values <- runif(ncell(biomass_raster), min = 0.1, max = 2.0) 
+    terra::values(biomass_raster) <- biomass_values * dry_biomass * cell_area # kg/m²
   } else {
-    terra::values(biomass_raster) <- rep(dry_biomass*(patch_width^2), ncell(biomass_raster))
+    terra::values(biomass_raster) <- rep(dry_biomass * cell_area, ncell(biomass_raster))
   }
   
   #assign calorie values to raster by convert biomass
@@ -310,7 +312,7 @@ sampling <- function(mass, metric = "t") {
 # net calories from grazing----
 #----------------------------------------------------------------------
 
-cals_net <- function(IDs, habitat, mass, models, speed, interval){
+cals_net <- function(IDs, habitat, mass, models, speed){
   
   #extract calorie values from which the movement track overlaps
   patch_values <- values(habitat)[IDs]
@@ -318,42 +320,47 @@ cals_net <- function(IDs, habitat, mass, models, speed, interval){
   #assign the sum of calorie values as the gross_gain
   cal_gross <- sum(patch_values, na.rm = TRUE)
   
-  #metabolic rate (kj/day) from Nagy 1987 https://doi.org/10.2307/1942620
-  BMR <- 0.774 + 0.727 * log10(mass)
-  #back transform
-  BMR <- 10^BMR
-  #convert to cal/s
-  BMR <- (BMR * 239.005736) / 86400
-  
   #time window
   lifespan <- (4.88 * mass^0.153) * 31536000 #years to seconds
   time_total <- lifespan * 0.001 # 1/1000 of a lifespan
   
-  #calculate total BMR cost over sample period 
+  #metabolic rate (kj/day) from Nagy 1987 https://doi.org/10.2307/1942620
+  BMR <- 0.774 + 0.727 * log10(mass)
+  #back transform
+  BMR <- 10^BMR
+  #convert to kcal/s
+  BMR <- (BMR * 0.239005736) / 86400
+  
+  # calculate total BMR cost over sample period (kcal)
   BMR_cost <- BMR * time_total
   
-  #calculate movement cost (watts/kg) from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1
+  # calculate movement cost (watts/kg) from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1
   E <- 10.7 * (mass / 1000)^(-0.316) * speed + 6.03 * (mass / 1000)^(-0.303)
-  #convert to kJ/s
-  E <- (E * mass/1000)/1000
-  #convert to cal/s
-  E <- E * 239.005736
+  # convert to watts
+  E <- E * (mass / 1000)
+  # convert to kcal/s
+  E <- E * 0.00023884589662749592
   
-  #extract number of movements made
-  num_movements <- sum(diff(IDs) != 0)
+  #extract movement data
+  coords <- xyFromCell(habitat, IDs)
+  distances <- sqrt(diff(coords[,1])^2 + diff(coords[,2])^2)
+  total_distance_m <- sum(distances, na.rm = TRUE)
   
-  #calculate total movement costs
-  move_cost <- num_movements * E * interval #prey.tau_p(mass) instead of prey.tau_v(mass)?
+  # calculate total movement costs
+  move_time <- total_distance_m / speed
   
-  #calculate total energetic costs
+  move_cost <- E * move_time
+  
+  # calculate total energetic costs in kcal
   cost_total <- BMR_cost + move_cost
   
-  #calculate absolute Daily Mass Intake (aDMI) in kg/day
-  #scaled to body mass from Clauss eet al. 2007 https://doi.org/10.1016/j.cbpa.2007.05.024
-  aDMI_day <- mass^0.76
-  
+  # calculate Daily Mass Intake (DMI) in g/day
+  # scaled to body mass from Nagy 2001 https://escholarship.org/uc/item/18s7d943
+  DMI_day <- 0.323 * mass^0.744
+  #convert to kg/day
+  DMI_day <- DMI_day / 1000
   #convert to kg
-  max_kg <- aDMI_day * (time_total / 86400)
+  max_kg <- DMI_day * (time_total / 86400)
   
   #assign cal_per_kg from food raster
   cal_per_kg <- attr(habitat, "cal_per_kg")
@@ -361,8 +368,8 @@ cals_net <- function(IDs, habitat, mass, models, speed, interval){
   #calculate max calories, converting from kg to calories
   max_cal <- max_kg * cal_per_kg
   
-  #calculate actual gain with intake cap and digestive efficiency
-  actual_gain <- min(cal_gross, max_cal)*0.6 #digestive efficiency factor
+  #calculate actual gain with intake cap
+  actual_gain <- min(cal_gross, max_cal)
   
   #assign net calories
   cal_net <- actual_gain - cost_total
@@ -388,11 +395,12 @@ prey.fitness <- function(mass,
   growth_cal <- cal_net*0.8 #allocation to soma
   repro_cal <- cal_net*0.2 #allocation to reproduction
   
-  weight.gain <- growth_cal / 15
+  #assume 2 kcal/g (wet) of weight gain
+  weight.gain <- growth_cal / 1.5
   mass.update <- mass + weight.gain
   
   #using mass allocated to reproduction to determine W_R
-  W_R <- repro_cal / 15
+  W_R <- repro_cal / 1.5
 
   #birth weight via allometric scaling in mammals from Blueweiss et al. 1978 https://doi.org/10.1007/BF00344996
   #wet weight $\approx$ 0.75 total weight
