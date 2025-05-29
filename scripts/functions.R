@@ -241,25 +241,40 @@ createFoodRaster <- function(mass, pred = FALSE, patch_width = 20,
 # Count the number of patches visited (assumes immediate renewal)----
 #----------------------------------------------------------------------
 
-grazing <- function(track, habitat, metric = "ids") {
+grazing <- function(track, habitat) {
   
   #convert track to data frame
   coords <- data.frame(x = track$x, y = track$y)
   
   #patch identities
   IDs <- cellFromXY(habitat, coords)
+  patch_values <- terra::extract(habitat, coords)[,1]
   
   #count the number of times it moved to a new food patch
-  PATCHES <- sum(diff(IDs) != 0)
+  NEW_PATCHES <- c(TRUE, diff(IDs) != 0)
   
   #mean time between patches 
   TIME <- mean(rle(c(FALSE, diff(IDs) != 0))$lengths)
   
-  #return values
-  if(metric == "patches"){return(PATCHES)}
-  if(metric == "time"){return(TIME)}
-  if(metric == "ids") {return(IDs)}
-  stop("Invalid metric. Use 'patches', 'time' or 'ids'.")
+  #get values for entering a new patch
+  entered_values <- patch_values[NEW_PATCHES]
+  
+  #calculate path length
+  steps <- sqrt(diff(coords$x)^2 + diff(coords$y)^2)
+  path <- sum(steps)
+  
+  #sum total caloric gain
+  kcals <- sum(entered_values, na.rm = TRUE)
+  
+  #assign attributes
+  attr(kcals, "patches") <- sum(NEW_PATCHES)
+  attr(kcals, "time") <- TIME
+  attr(kcals, "ids") <- IDs
+  attr(kcals, "entered_values") <- entered_values
+  attr(kcals, "path_length") <- path
+  
+  #return calories
+  return(kcals)
 }
 
 #----------------------------------------------------------------------
@@ -312,13 +327,10 @@ sampling <- function(mass, metric = "t") {
 # net calories from grazing----
 #----------------------------------------------------------------------
 
-cals_net <- function(IDs, habitat, mass, models, speed){
-  
-  #extract calorie values from which the movement track overlaps
-  patch_values <- values(habitat)[IDs]
+cals_net <- function(kcals, habitat, mass, speed){
   
   #assign the sum of calorie values as the gross_gain
-  cal_gross <- sum(patch_values, na.rm = TRUE)
+  cal_gross <- kcals
   
   #time window
   lifespan <- (4.88 * mass^0.153) * 31536000 #years to seconds
@@ -342,9 +354,7 @@ cals_net <- function(IDs, habitat, mass, models, speed){
   E <- E * 0.00023884589662749592
   
   #extract movement data
-  coords <- xyFromCell(habitat, IDs)
-  distances <- sqrt(diff(coords[,1])^2 + diff(coords[,2])^2)
-  total_distance_m <- sum(distances, na.rm = TRUE)
+  total_distance_m <- attr(kcals, "path_length")
   
   # calculate total movement costs
   move_time <- total_distance_m / speed
@@ -356,7 +366,7 @@ cals_net <- function(IDs, habitat, mass, models, speed){
   
   # calculate Daily Mass Intake (DMI) in g/day
   # scaled to body mass from Nagy 2001 https://escholarship.org/uc/item/18s7d943
-  DMI_day <- 0.323 * mass^0.744
+  DMI_day <- 0.859 * mass^0.628
   #convert to kg/day
   DMI_day <- DMI_day / 1000
   #convert to kg
@@ -395,12 +405,12 @@ prey.fitness <- function(mass,
   growth_cal <- cal_net*0.8 #allocation to soma
   repro_cal <- cal_net*0.2 #allocation to reproduction
   
-  #assume 2 kcal/g (wet) of weight gain
-  weight.gain <- growth_cal / 1.5
+  #assume 1 kcal/g (wet) of weight gain
+  weight.gain <- growth_cal / 1
   mass.update <- mass + weight.gain
   
   #using mass allocated to reproduction to determine W_R
-  W_R <- repro_cal / 1.5
+  W_R <- repro_cal / 1
 
   #birth weight via allometric scaling in mammals from Blueweiss et al. 1978 https://doi.org/10.1007/BF00344996
   #wet weight $\approx$ 0.75 total weight

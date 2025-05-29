@@ -34,13 +34,13 @@ t <- sampling(mass_prey)
 interval <- sampling(mass_prey, metric = "interval")
 
 #number of individuals in arena
-n_prey <- 5
+n_prey <- 1
 
 #number of arenas
 REPS <- 1
 
 #number of generations
-GENS <- 25
+GENS <- 1
 
 #build food raster
 FOOD <- createFoodRaster(mass_prey)
@@ -113,13 +113,13 @@ for(G in 1:GENS) {
     #extract ids of patches entered
     benefits_prey <- vector("list", n_prey)
     for(i in 1:n_prey){
-      benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD, metric = "ids")
+      benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD)
     }
     
     #extract number of changes between patches
     patches <- vector("list", n_prey)
     for(i in 1:n_prey){
-      patches[[i]] <- grazing(PREY_tracks[[i]], FOOD, metric = "patches")
+      patches[[i]] <- attr(benefits_prey[[i]], "patches")
     }
     
     #extract speed from model
@@ -135,10 +135,9 @@ for(G in 1:GENS) {
     for(i in 1:n_prey){
       mass <- if(length(mass_prey) == 1) mass_prey else mass_prey[i]
       
-      cal_list[[i]] <- cals_net(IDs = benefits_prey[[i]], 
+      cal_list[[i]] <- cals_net(kcals = benefits_prey[[i]], 
                                habitat = FOOD, 
                                mass = mass, 
-                               models = PREY_mods[[i]],
                                speed = speed[[i]])
       # Defensive: check result is valid
       if (is.list(cal_list[[i]]) &&
