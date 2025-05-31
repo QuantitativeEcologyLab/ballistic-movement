@@ -3,8 +3,6 @@
 
 # Set the working directory
 setwd("~/ballisticmovement/ballistic-movement/scripts")
-# Set the random seed
-set.seed(1)
 
 # Import necessary packages
 library(extraDistr)
@@ -31,7 +29,6 @@ mass_prey <- 1000
 
 #set sampling interval and lifespan
 t <- sampling(mass_prey)
-interval <- sampling(mass_prey, metric = "interval")
 
 #number of individuals in arena
 n_prey <- 1
@@ -40,11 +37,11 @@ n_prey <- 1
 REPS <- 1
 
 #number of generations
-GENS <- 1
+GENS <- 2
 
 #build food raster
-FOOD <- createFoodRaster(mass_prey)
-plot(FOOD, col = "steelblue")
+FOOD <- createFoodRaster(mass_prey, patch_width = round(sqrt(pred.SIG(mass_prey))/10))
+plot(FOOD)
 grid(nx = ncol(FOOD), ny = nrow(FOOD), col = "black", lty = "dotted")
 
 #lists for storing results
@@ -56,7 +53,7 @@ prey_details <- list()
 #----------------------------------------------------------------------
 
 for(G in 1:GENS) {
-  tic(paste("Generation", i))
+  tic(paste("Generation", G))
   
   prey <- list()
   
@@ -113,13 +110,19 @@ for(G in 1:GENS) {
     #extract ids of patches entered
     benefits_prey <- vector("list", n_prey)
     for(i in 1:n_prey){
-      benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD)
+      benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD, mass_prey)
     }
     
     #extract number of changes between patches
     patches <- vector("list", n_prey)
     for(i in 1:n_prey){
       patches[[i]] <- attr(benefits_prey[[i]], "patches")
+    }
+    
+    #extract unscaled gross kJ
+    kJ_gross_unsc <- vector("list", n_prey)
+    for(i in 1:n_prey){
+      kJ_gross_unsc[[i]] <- attr(benefits_prey[[i]], "kJ_gross_unsc")
     }
     
     #extract speed from model
@@ -129,33 +132,35 @@ for(G in 1:GENS) {
     }
     
     #assign net calories to each individual
-    cal_list <- vector("list", n_prey)
-    cal_net <- numeric(n_prey)
-    cal_max <- numeric(n_prey)
+    kJ_list <- vector("list", n_prey)
+    kJ_net <- numeric(n_prey)
+    kJ_gross <- numeric(n_prey)
+    cost <- numeric(n_prey)
     for(i in 1:n_prey){
       mass <- if(length(mass_prey) == 1) mass_prey else mass_prey[i]
       
-      cal_list[[i]] <- cals_net(kcals = benefits_prey[[i]], 
-                               habitat = FOOD, 
-                               mass = mass, 
-                               speed = speed[[i]])
+      kJ_list[[i]] <- net_kJ_val(kJ_gross = benefits_prey[[i]], 
+                             habitat = FOOD, 
+                             mass = mass, 
+                             t = t,
+                             speed = speed[[i]])
       # Defensive: check result is valid
-      if (is.list(cal_list[[i]]) &&
-          all(c("cal_net", "cal_max") %in% names(cal_list[[i]]))) {
+      if (is.list(kJ_list[[i]]) &&
+          all(c("kJ_net") %in% names(kJ_list[[i]]))) {
         
-        cal_net[i] <- cal_list[[i]]$cal_net
-        cal_max[i] <- cal_list[[i]]$cal_max
+        kJ_net[i] <- kJ_list[[i]]$kJ_net
+        kJ_gross[i] <- kJ_list[[i]]$kJ_gross
+        cost[i] <- kJ_list[[i]]$cost
         
       } else {
-        cal_net[i] <- NA
-        cal_max[i] <- NA
+        kJ_net[i] <- NA
         warning(sprintf("Invalid result from cals_net for individual %d", i))
       }
     }
     
     #compute prey offspring
     results <- prey.fitness(mass = mass_prey,
-                            cal_net = cal_net)
+                            kJ_net = kJ_net)
     
     offspring_prey <- results$offspring
     mass_update_prey <- results$mass_update
@@ -179,8 +184,10 @@ for(G in 1:GENS) {
                             sig = prey_SIGMA,
                             lv = prey_lvs,
                             patches = unlist(patches),
-                            kcal = cal_net,
-                            kcal_max = cal_max,
+                            kJ_gross_unsc = unlist(kJ_gross_unsc),
+                            kJ_net = kJ_net,
+                            kJ_gross = kJ_gross,
+                            cost = cost,
                             speed = unlist(speed),
                             offspring = unlist(offspring_prey),
                             mass = mass_prey,
@@ -216,17 +223,9 @@ for(G in 1:GENS) {
     # If no offspring, save results and stop simulation
     if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
       warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
-      
-      save(prey_res, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_5000g_prey_res2.Rda')
-      save(prey_details, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_5000g_prey_details2.Rda')
-      
       break
     }
   }
-  
-  #Save prey results
-  save(prey_res, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_5000g_prey_res2.Rda')
-  save(prey_details, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_5000g_prey_details2.Rda')
   
   #progress report
   print(G)
@@ -266,7 +265,7 @@ rel.lv.gen <- ggplot(prey_res_df, aes(x = generation, y = rel.lv)) +
 print(rel.lv.gen)
 
 # calories ~ lv
-cal.lv <- ggplot(prey_details_df, aes(x = lv, y = cal)) +
+cal.lv <- ggplot(prey_details_df, aes(x = lv, y = kJ_net)) +
   geom_line(color = "red", linewidth = 1) +
   labs(
     y = "net calories",
@@ -316,7 +315,7 @@ speed.lv <- ggplot(prey_details_df, aes(x = lv, y = speed)) +
 print(speed.lv)
 
 # offspring ~ calories
-offspring.cal <- ggplot(prey_details_df, aes(x = cal, y = offspring)) +
+offspring.cal <- ggplot(prey_details_df, aes(x = kJ_net, y = offspring)) +
   geom_line(color = "red", linewidth = 1) +
   labs(
     y = "offspring",
@@ -326,16 +325,16 @@ offspring.cal <- ggplot(prey_details_df, aes(x = cal, y = offspring)) +
 print(offspring.cal)
 
 # offspring ~ mass
-offspring.mass <- ggplot(prey_details_df, aes(x = generation, y = mass)) +
+offspring.mass <- ggplot(prey_details_df, aes(x = generation, y = mass_update)) +
   geom_line(color = "red", linewidth = 1) +
   labs(
-    y = "offspring",
-    x = "mass_updated") +
+    y = "mass_updated",
+    x = "generation") +
   theme_minimal()
 
 print(offspring.mass)
 
-off.mass <- ggplot(prey_details_df, aes(x = mass, y = offspring)) +
+off.mass <- ggplot(prey_details_df, aes(x = mass_update, y = offspring)) +
   geom_line(color = "red", linewidth = 1) +
   theme_minimal()
 
@@ -431,6 +430,7 @@ plots <- list(rel.lv.gen,
               speed.gen,
               offspring.cal, 
               offspring.mass,
+              off.mass,
               offspring.speed, 
               mass.gen,
               tauv.gen, 
