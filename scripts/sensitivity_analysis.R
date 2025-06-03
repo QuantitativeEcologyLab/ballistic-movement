@@ -212,7 +212,7 @@ run_sens <- function(mass_prey,
       # If no offspring, save results and stop simulation
       if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
         warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
-        break
+        return(prey_details)
       }
     }
     
@@ -257,13 +257,18 @@ tic(paste("Scenario", i))
   
   
   # Run the simulation with your exact code inside
-  res <- run_sens(
-    mass_prey = params$mass,
-    fctr = params$fctr,
-    GENS = GENS,
-    REPS = REPS,
-    n_prey = n_prey
-  )
+  res <- tryCatch({
+    run_sens(
+      mass_prey = params$mass,
+      fctr = params$fctr,
+      GENS = GENS,
+      REPS = REPS,
+      n_prey = n_prey
+    )
+  }, error = function(e) {
+    warning(sprintf("Scenario %d failed: %s", i, e$message))
+    NULL  # store NULL so indexing is preserved
+  })
   
   all_results[[i]] <- res
   

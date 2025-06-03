@@ -25,19 +25,19 @@ source("functions.R")
 mass_pred <- 1000
 
 # Prey mass (g)
-mass_prey <- 1000
+mass_prey <- 300000
 
 #set sampling interval and lifespan
 t <- sampling(mass_prey)
 
 #number of individuals in arena
-n_prey <- 1
+n_prey <- 5
 
 #number of arenas
-REPS <- 1
+REPS <- 2
 
 #number of generations
-GENS <- 2
+GENS <- 10
 
 #build food raster
 FOOD <- createFoodRaster(mass_prey, patch_width = round(sqrt(pred.SIG(mass_prey))/10))
@@ -104,13 +104,19 @@ for(G in 1:GENS) {
     #simulate prey movement
     PREY_tracks <- list()
     for(i in 1:n_prey){
-      PREY_tracks[[i]] <- simulate(PREY_mods[[i]], t = t)
+      PREY_tracks[[i]] <- suppressWarnings(simulate(PREY_mods[[i]], t = t))
+    }
+    
+    #extract speed from model
+    speed <- numeric(n_prey)
+    for(i in 1:n_prey){
+      speed[[i]] <- speed_val(models = PREY_mods[[i]], mass = mass_prey)
     }
     
     #extract ids of patches entered
     benefits_prey <- vector("list", n_prey)
     for(i in 1:n_prey){
-      benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD, mass_prey)
+      benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD, mass_prey, speed[[i]])
     }
     
     #extract number of changes between patches
@@ -123,12 +129,6 @@ for(G in 1:GENS) {
     kJ_gross_unsc <- vector("list", n_prey)
     for(i in 1:n_prey){
       kJ_gross_unsc[[i]] <- attr(benefits_prey[[i]], "kJ_gross_unsc")
-    }
-    
-    #extract speed from model
-    speed <- numeric(n_prey)
-    for(i in 1:n_prey){
-      speed[[i]] <- speed_val(models = PREY_mods[[i]])
     }
     
     #assign net calories to each individual
@@ -229,6 +229,10 @@ for(G in 1:GENS) {
   
   #progress report
   print(G)
+  
+  #save after each generation
+  save(prey_details, file = "~/ballisticmovement/ballistic-movement/sim_results/5000g_prey_CR_125")
+  
   toc(log = TRUE)
 }
 
@@ -243,7 +247,7 @@ print(prey_details)
 prey_res_df <- do.call(rbind, prey_res)
 print(prey_res_df)
 prey_details_df <- do.call(rbind, prey_details)
-print(prey_details_df)
+
 
 # relative change in lv ~ generation
 PREY_LV <- prey_res_df$lv[1]
@@ -251,192 +255,197 @@ prey_res_df$rel.lv <- prey_res_df$lv/PREY_LV
 prey_res_df$rel_var <- prey_res_df$var / (PREY_LV^2)
 prey_res_df$rel_sd <- sqrt(prey_res_df$rel_var)
 
+# rel lv ~
 rel.lv.gen <- ggplot(prey_res_df, aes(x = generation, y = rel.lv)) +
-  geom_line(color = "red", linewidth = 1) +
+  geom_line(color = "deeppink4", linewidth = 1) +
   geom_hline(yintercept = 1, color = 'grey30', linetype = "dashed") +
   geom_ribbon(aes(ymin = rel.lv - rel_sd,
                   ymax = rel.lv + rel_sd),
-              fill = "red", alpha = 0.3) +
-  labs(
-    y = "relative change in lv",
-    x = "generation") +
+              fill = "deeppink4", alpha = 0.3) +
+  labs(y = "relative change in lv",x = "generation") +
   theme_minimal()
-
-print(rel.lv.gen)
-
-# calories ~ lv
-cal.lv <- ggplot(prey_details_df, aes(x = lv, y = kJ_net)) +
-  geom_line(color = "red", linewidth = 1) +
-  labs(
-    y = "net calories",
-    x = "lv") +
-  theme_minimal()
-
-print(cal.lv)
-
-# offspring ~ lv
-offspring.lv <- ggplot(prey_details_df, aes(x = lv, y = offspring)) +
-  geom_line(color = "red", linewidth = 1) +
-  labs(
-    y = "offspring",
-    x = "lv") +
-  theme_minimal()
-
-print(offspring.lv)
-
-# mass ~ gen
-mass.gen <- ggplot(prey_details_df, aes(x = generation, y = mass_update)) +
-  geom_line(color = "red", linewidth = 1) +
-  labs(
-    y = "mass_updated",
-    x = "generation") +
-  theme_minimal()
-
-print(mass.gen)
-
-# number of patches ~ lv
-patches.lv <- ggplot(prey_details_df, aes(x = lv, y = patches)) +
-  geom_line(color = "red", linewidth = 1) +
-  labs(
-    y = "number of patches",
-    x = "lv") +
-  theme_minimal()
-
-print(patches.lv)
-
-# speed ~ lv
-speed.lv <- ggplot(prey_details_df, aes(x = lv, y = speed)) +
-  geom_line(color = "red", linewidth = 1) +
-  labs(
-    y = "speed",
-    x = "lv") +
-  theme_minimal()
-
-print(speed.lv)
-
-# offspring ~ calories
-offspring.cal <- ggplot(prey_details_df, aes(x = kJ_net, y = offspring)) +
-  geom_line(color = "red", linewidth = 1) +
-  labs(
-    y = "offspring",
-    x = "calories") +
-  theme_minimal()
-
-print(offspring.cal)
-
-# offspring ~ mass
-offspring.mass <- ggplot(prey_details_df, aes(x = generation, y = mass_update)) +
-  geom_line(color = "red", linewidth = 1) +
-  labs(
-    y = "mass_updated",
-    x = "generation") +
-  theme_minimal()
-
-print(offspring.mass)
-
-off.mass <- ggplot(prey_details_df, aes(x = mass_update, y = offspring)) +
-  geom_line(color = "red", linewidth = 1) +
-  theme_minimal()
-
-print(off.mass)
-
-# speed ~ mass
-speed.mass <- ggplot(prey_details_df, aes(x = mass_update, y = speed)) +
-  geom_line(color = "red", linewidth = 1) +
-  labs(
-    y = "speed",
-    x = "mass_updated") +
-  theme_minimal()
-
-print(speed.mass)
-
-# offspring ~ speed
-offspring.speed <- ggplot(prey_details_df, aes(x = speed, y = offspring)) +
-  geom_line(color = "red", linewidth = 1) +
-  labs(
-    y = "offspring",
-    x = "speed") +
-  theme_minimal()
-
-print(offspring.speed)
-
-# number of patches ~ speed
-patches.speed <- ggplot(prey_details_df, aes(x = speed, y = patches)) +
-  geom_line(color = "red", linewidth = 1) +
-  labs(
-    y = "patches",
-    x = "speed") +
-  theme_minimal()
-
-print(patches.speed)
-
-# speed ~ generation
-speed.gen <- ggplot(prey_details_df, aes(x = generation, y = speed)) +
-  stat_summary(fun = mean, geom = "line", col = "red", linewidth = 1)+
-  labs(
-    y = "speed",
-    x = "generation") +
-  theme_minimal()
-
-print(speed.gen)
 
 # tau_v ~ generation
 tauv.gen <- ggplot(prey_details_df, aes(x = generation, y = tau_v)) +
-  stat_summary(fun = mean, geom = "line", col = "red", linewidth = 1)+
-  labs(
-    y = "tau_v",
-    x = "generation") +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1)+
+  labs(y = "tau_v", x = "generation") +
   theme_minimal()
-
-print(tauv.gen)
 
 # tau_p ~ generation
 taup.gen <- ggplot(prey_details_df, aes(x = generation, y = tau_p)) +
-  stat_summary(fun = mean, geom = "line", col = "red", linewidth = 1)+
-  labs(
-    y = "tau_p",
-    x = "generation") +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1)+
+  labs(y = "tau_p", x = "generation") +
   theme_minimal()
 
-print(taup.gen)
+# sig ~ generation
+sig.gen <- ggplot(prey_details_df, aes(x = generation, y = sig)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "sig", x = "generation") +
+  theme_minimal()
 
-# movement paths
-track_df <- do.call(rbind, lapply(1:length(PREY_tracks), function(i) {
-  data.frame(x = PREY_tracks[[i]]$x,
-             y = PREY_tracks[[i]]$y,
-             t = PREY_tracks[[i]]$t,
-             id = as.factor(i))
-}))
+# lv ~ mass_update
+lv.mass <- ggplot(prey_details_df, aes(x = generation, y = lv)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "lv", x = "mass_update") +
+  theme_minimal()
 
-food_df <- as.data.frame(FOOD, xy = TRUE)
-colnames(food_df) <- c("x", "y", "value")
+# patches ~ generation
+patches.gen <- ggplot(prey_details_df, aes(x = generation, y = patches)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "patches visited", x = "generation") +
+  theme_minimal()
 
-move <- ggplot() +
-  geom_raster(data = food_df, aes(x = x, y = y, fill = value)) +
-  geom_path(data = track_df, aes(x = x, y = y, group = id, color = id), inherit.aes = FALSE) +
-  theme_minimal() +
-  labs(title = "Prey Movement over Food Landscape", x = "X", y = "Y") +
-  theme(legend.position = "none")
-print(move)
+# number of patches ~ lv
+patches.lv <- ggplot(prey_details_df, aes(x = lv, y = patches)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "patches visited", x = "lv") +
+  theme_minimal()
 
-#final plot
+# number of patches ~ speed
+patches.speed <- ggplot(prey_details_df, aes(x = speed, y = patches)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "patches visited", x = "speed") +
+  theme_minimal()
+
+# patches ~ offspring
+patches.off <- ggplot(prey_details_df, aes(x = offspring, y = patches)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(x = "offspring", y = "patches visited") + 
+  theme_minimal()
+
+# kJ_net ~ generation
+kJ.gen <- ggplot(prey_details_df, aes(x = generation, y = kJ_net)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(x = "generation", y = "net kJ") +
+  theme_minimal()
+
+# kJ_net ~ mass_update
+kJ.mass <- ggplot(prey_details_df, aes(x = mass_update, y = kJ_net)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(x = "mass_update", y = "net kJ") +
+  theme_minimal()
+
+# kJ_net ~ lv
+kJ.lv <- ggplot(prey_details_df, aes(x = lv, y = kJ_net)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "net kJ", x = "lv") +
+  theme_minimal()
+
+# cost ~ generation
+cost.gen <- ggplot(prey_details_df, aes(x = generation, y = cost)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "metabolic costs", y = "generation") +
+  theme_minimal()
+
+# cost ~ mass_update
+cost.mass <- ggplot(prey_details_df, aes(x = mass_update, y = cost)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "metabolic costs", y = "mass_update") +
+  theme_minimal()
+
+# cost ~ speed
+cost.speed <- ggplot(prey_details_df, aes(x = speed, y = cost)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "metabolic costs", y = "speed") + 
+  theme_minimal()
+
+# speed ~ generation
+speed.gen <- ggplot(prey_details_df, aes(x = generation, y = speed)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "speed", x = "generation") +
+  theme_minimal()
+
+# speed ~ kJ_net 
+speed.kJ <- ggplot(prey_details_df, aes(x = kJ_net, y = speed)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(x = "net kJ", y = "speed") +
+  theme_minimal()
+
+# speed ~ lv
+speed.lv <- ggplot(prey_details_df, aes(x = lv, y = speed)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "speed", x = "lv") +
+  theme_minimal()
+
+# speed ~ mass_update
+speed.mass <- ggplot(prey_details_df, aes(x = mass_update, y = speed)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "speed", x = "mass_update") +
+  theme_minimal()
+
+# offspring ~ generation
+offspring.gen <- ggplot(prey_details_df, aes(x = generation, y = offspring)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(x = "generation", y = "offspring") +
+  theme_minimal()
+
+# offspring ~ speed
+offspring.speed <- ggplot(prey_details_df, aes(x = speed, y = offspring)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "offspring", x = "speed") +
+  theme_minimal()
+
+# offspring ~ lv
+offspring.lv <- ggplot(prey_details_df, aes(x = lv, y = offspring)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "offspring", x = "lv") +
+  theme_minimal()
+
+# offspring ~ kJ_net
+offspring.kJ <- ggplot(prey_details_df, aes(x = kJ_net, y = offspring)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "offspring", x = "net kJ") +
+  theme_minimal()
+
+# offspring ~ mass_update
+offspring.mass <- ggplot(prey_details_df, aes(x = mass_update, y = offspring)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "offspring", x = "mass_update") +
+  theme_minimal()
+
+# mass ~ gen
+mass.gen <- ggplot(prey_details_df, aes(x = generation, y = mass_update)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "mass_updated", x = "generation") +
+  theme_minimal()
+
+# kJ scaled vs unscaled ~ generation 
+kJsc.kJunsc <- ggplot(prey_details_df, aes(x = generation)) +
+  geom_line(aes(y = kJ_gross, color = "kJ gross scaled")) +
+  geom_line(aes(y = kJ_gross_unsc, color = "kJ gross unscaled")) +
+  scale_color_manual(values = c("kJ gross scaled" = "steelblue4", "kJ gross unscaled" = "tomato4")) +
+  labs(x = "generation", y = "kJ gained", color = "Legend") +
+  theme_minimal()
+
+print(kJsc.kJunsc)
+
 plots <- list(rel.lv.gen,
-              cal.lv, 
-              offspring.lv, 
-              patches.lv, 
+              taup.gen,
+              tauv.gen,
+              sig.gen,
+              lv.mass,
+              patches.gen,
+              patches.lv,
               patches.speed,
-              speed.lv, 
-              speed.mass,
+              patches.off,
+              kJ.gen,
+              kJ.mass,
+              kJ.lv,
+              cost.gen,
+              cost.mass,
+              cost.speed,
               speed.gen,
-              offspring.cal, 
+              speed.kJ,
+              speed.lv,
+              speed.mass,
+              offspring.gen,
+              offspring.speed,
+              offspring.lv,
+              offspring.kJ,
               offspring.mass,
-              off.mass,
-              offspring.speed, 
-              mass.gen,
-              tauv.gen, 
-              taup.gen)
+              mass.gen)
 
-final.plot <- wrap_plots(plots, ncol = 3)
+final.plot <- wrap_plots(plots, ncol = 5)
 print(final.plot)
 
 #prey lv and fitness

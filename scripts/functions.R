@@ -180,12 +180,12 @@ prey.mass <- function(mass, variance = FALSE) {
 
 createFoodRaster <- function(mass, pred = FALSE, 
                              patch_width = 20,
-                             fctr = 25,
+                             fctr = 15,
                              heterogeneity = FALSE) {
 
   #calculate kJ per patch based on BMR
   BMR <- 4.17 * (mass)^(0.67)
-  kJ <- BMR / fctr
+  kJ <- 0.02 * BMR^1.1
   
   #var[position]
   if(pred){SIG <- pred.SIG(mass)} else{
@@ -222,7 +222,7 @@ createFoodRaster <- function(mass, pred = FALSE,
 # Count the number of patches visited (assumes immediate renewal) ---------
 #--------------------------------------------------------------------------
 
-grazing <- function(track, habitat, mass) {
+grazing <- function(track, habitat, mass, speed) {
   
   #convert track to data frame
   coords <- data.frame(x = track$x, y = track$y)
@@ -252,7 +252,9 @@ grazing <- function(track, habitat, mass) {
   timestep <- max(1, round(prey.tau_v(mass)))
   TIME_sec <- TIME * timestep
   
-  patch_intake <- pmin(entered_values, TIME_sec * kJ_rate)
+  #speed_penalty <- exp(-0.5 * speed^2)
+  
+  patch_intake <- pmin(entered_values, TIME_sec * kJ_rate ) #* speed penalty
   
   #sum total caloric gain
   kJ_gross <- sum(patch_intake, na.rm = TRUE)
@@ -274,7 +276,7 @@ grazing <- function(track, habitat, mass) {
 # extract speed ------------------------------------------------------------
 #---------------------------------------------------------------------------
 
-speed_val <- function(models){
+speed_val <- function(models, mass){
   #extract movement speeds from the models
   model_summary <- summary(models, units = FALSE)
   
@@ -284,6 +286,15 @@ speed_val <- function(models){
   } else {
     SPEED <- Inf
   }
+  
+  # Maximum running speed in km/hr from Hirt et al. 2017 https://doi.org/10.1038/s41559-017-0241-4
+  v_max <- 25.5 * (mass/1000)^(0.26) * (1 - exp(-22*(mass/1000)^(-0.66)))
+  
+  #Convert to m/s
+  v_max <- v_max/3.6
+  v_max_cap <- v_max * 0.3 #assume 30% maximum speed for foraging
+  
+  SPEED <- pmin(SPEED, v_max_cap)
   
   #return speed
   return(SPEED)
@@ -338,16 +349,16 @@ net_kJ_val <- function(kJ_gross, habitat, mass, speed, t){
   BMR_cost <- BMR * time_total
   
   # calculate movement cost (watts) from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1
-  E <- 10.7 * (mass / 1000)^(0.684) * speed + 6.03 * (mass / 1000)^(0.697)
+  E <- (10.7 * (mass / 1000)^(0.684) * speed) + (6.03 * (mass / 1000)^(0.697))
   #convert to kJ/s
   E <- E / 1000
   
   #extract movement data
   total_distance_m <- attr(kJ_gross, "path_length")
   
-  # calculate total movement costs
-  move_time <- total_distance_m / speed
-  move_cost <- E * move_time
+  #if speed is given as a single mean value from the total travel,
+  #then using the total_time to convert energy (kJ/s) to kJ?
+  move_cost <- E * time_total
   
   # calculate total energetic costs in kJ
   cost_total <- BMR_cost + move_cost
@@ -375,8 +386,8 @@ prey.fitness <- function(mass,
   
   #update weight
   kJ_net[kJ_net < 0] <- 0 #prevent negative
-  growth_kJ <- kJ_net*0.7 #allocation to soma
-  repro_kJ <- kJ_net*0.3 #allocation to reproduction
+  growth_kJ <- kJ_net*0.6 #allocation to soma
+  repro_kJ <- kJ_net*0.4 #allocation to reproduction
   
   #assume 5 kJ/g (wet) of weight gain
   weight.gain <- growth_kJ / 10
