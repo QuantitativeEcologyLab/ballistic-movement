@@ -1,8 +1,11 @@
 
+
 # Preamble ----
 
 # Set the working directory
 setwd("~/ballisticmovement/ballistic-movement/scripts")
+# Set the random seed
+set.seed(1)
 
 # Import necessary packages
 library(extraDistr)
@@ -12,48 +15,40 @@ library(ggplot2)
 library(dplyr)
 library(gridExtra)
 library(patchwork)
-library(tictoc)
 
 # Source the functions (ensure 'functions.R' is available in the working directory)
 source("functions.R")
 
 #----------------------------------------------------------------------
-# set up global parameters----
+# run the simulation----
 #----------------------------------------------------------------------
 
-#predator mass (g)
-mass_pred <- 1000
-
 # Prey mass (g)
-mass_prey <- 300000
+mass_prey <- 1000
 
 #set sampling interval and lifespan
 t <- sampling(mass_prey)
+interval <- sampling(mass_prey, metric = "interval")
 
 #number of individuals in arena
 n_prey <- 5
 
 #number of arenas
-REPS <- 2
+REPS <- 1
 
 #number of generations
-GENS <- 10
+GENS <- 2
 
 #build food raster
-FOOD <- createFoodRaster(mass_prey, patch_width = round(sqrt(pred.SIG(mass_prey))/10))
-plot(FOOD)
+FOOD <- createFoodRaster(mass_prey, width = round(sqrt(prey.SIG(mass_prey))))
+plot(FOOD, col = "steelblue")
 grid(nx = ncol(FOOD), ny = nrow(FOOD), col = "black", lty = "dotted")
 
 #lists for storing results
 prey_res <- list()
 prey_details <- list()
 
-#----------------------------------------------------------------------
-# run the simulation----
-#----------------------------------------------------------------------
-
 for(G in 1:GENS) {
-  tic(paste("Generation", G))
   
   prey <- list()
   
@@ -104,63 +99,56 @@ for(G in 1:GENS) {
     #simulate prey movement
     PREY_tracks <- list()
     for(i in 1:n_prey){
-      PREY_tracks[[i]] <- suppressWarnings(simulate(PREY_mods[[i]], t = t))
-    }
-    
-    #extract speed from model
-    speed <- numeric(n_prey)
-    for(i in 1:n_prey){
-      speed[[i]] <- speed_val(models = PREY_mods[[i]], mass = mass_prey)
+      PREY_tracks[[i]] <- simulate(PREY_mods[[i]], t = t)
     }
     
     #extract ids of patches entered
     benefits_prey <- vector("list", n_prey)
     for(i in 1:n_prey){
-      benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD, mass_prey, speed[[i]])
+      benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD, metric = "ids")
     }
     
     #extract number of changes between patches
     patches <- vector("list", n_prey)
     for(i in 1:n_prey){
-      patches[[i]] <- attr(benefits_prey[[i]], "patches")
+      patches[[i]] <- grazing(PREY_tracks[[i]], FOOD, metric = "patches")
     }
     
-    #extract unscaled gross kJ
-    kJ_gross_unsc <- vector("list", n_prey)
+    #extract speed from model
+    speed <- numeric(n_prey)
     for(i in 1:n_prey){
-      kJ_gross_unsc[[i]] <- attr(benefits_prey[[i]], "kJ_gross_unsc")
+      speed[[i]] <- speed_val(models = PREY_mods[[i]])
     }
     
     #assign net calories to each individual
-    kJ_list <- vector("list", n_prey)
-    kJ_net <- numeric(n_prey)
-    kJ_gross <- numeric(n_prey)
-    cost <- numeric(n_prey)
+    cal_list <- vector("list", n_prey)
+    cal_net <- numeric(n_prey)
+    costs <- numeric(n_prey)
     for(i in 1:n_prey){
       mass <- if(length(mass_prey) == 1) mass_prey else mass_prey[i]
       
-      kJ_list[[i]] <- net_kJ_val(kJ_gross = benefits_prey[[i]], 
-                             habitat = FOOD, 
-                             mass = mass, 
-                             t = t,
-                             speed = speed[[i]])
+      cal_list[[i]] <- cals_net(IDs = benefits_prey[[i]], 
+                                habitat = FOOD, 
+                                mass = mass, 
+                                models = PREY_mods[[i]],
+                                speed = speed[[i]],
+                                interval = interval)
       # Defensive: check result is valid
-      if (is.list(kJ_list[[i]]) &&
-          all(c("kJ_net") %in% names(kJ_list[[i]]))) {
+      if (is.list(cal_list[[i]]) &&
+          all(c("cal_net") %in% names(cal_list[[i]]))) {
         
-        kJ_net[i] <- kJ_list[[i]]$kJ_net
-        kJ_gross[i] <- kJ_list[[i]]$kJ_gross
-        cost[i] <- kJ_list[[i]]$cost
+        cal_net[i] <- cal_list[[i]]$cal_net
+        costs[i] <- cal_list[[i]]$costs
         
       } else {
-        kJ_net[i] <- NA
+        cal_net[i] <- NA
         warning(sprintf("Invalid result from cals_net for individual %d", i))
       }
     }
     
     #compute prey offspring
     results <- prey.fitness(mass = mass_prey,
-                            kJ_net = kJ_net)
+                            cal_net = cal_net)
     
     offspring_prey <- results$offspring
     mass_update_prey <- results$mass_update
@@ -184,10 +172,8 @@ for(G in 1:GENS) {
                             sig = prey_SIGMA,
                             lv = prey_lvs,
                             patches = unlist(patches),
-                            kJ_gross_unsc = unlist(kJ_gross_unsc),
-                            kJ_net = kJ_net,
-                            kJ_gross = kJ_gross,
-                            cost = cost,
+                            cal_net = cal_net,
+                            costs = costs,
                             speed = unlist(speed),
                             offspring = unlist(offspring_prey),
                             mass = mass_prey,
@@ -208,7 +194,7 @@ for(G in 1:GENS) {
   PREY_tau_v <- vector()
   PREY_sig <- vector()
   for(i in 1:nrow(prey)){
-    if(prey[i,"offspring"] > 0){
+    if(prey[i,"offspring"] >0){
       PREY_tau_p <- c(PREY_tau_p,
                       rep(prey[i,"tau_p"], prey[i,"offspring"]))
       
@@ -219,22 +205,25 @@ for(G in 1:GENS) {
                     rep(prey[i,"sig"], prey[i,"offspring"]))
       
     } #Closes the if statement
-    
-    # If no offspring, save results and stop simulation
-    if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
-      warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
-      break
-    }
   }
+  # If no offspring, save results and stop simulation
+    if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
+    warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
+    
+    save(prey_res, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_1000g_prey_res.Rda')
+    save(prey_details, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_1000g_prey_details.Rda')
+    
+    break
+  }
+  
+  #Save prey results
+  save(prey_res, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_1000g_prey_res.Rda')
+  save(prey_details, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_1000g_prey_details.Rda')
   
   #progress report
   print(G)
-  
-  #save after each generation
-  save(prey_details, file = "~/ballisticmovement/ballistic-movement/sim_results/5000g_prey_CR_125")
-  
-  toc(log = TRUE)
 }
+
 
 print(prey_res)
 print(prey_details)
@@ -313,58 +302,58 @@ patches.off <- ggplot(prey_details_df, aes(x = offspring, y = patches)) +
   labs(x = "offspring", y = "patches visited") + 
   theme_minimal()
 
-# kJ_net ~ generation
-kJ.gen <- ggplot(prey_details_df, aes(x = generation, y = kJ_net)) +
+# cal_net ~ generation
+cal.gen <- ggplot(prey_details_df, aes(x = generation, y = cal_net)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(x = "generation", y = "net kJ") +
+  labs(x = "generation", y = "net calories") +
   theme_minimal()
 
-# kJ_net ~ mass_update
-kJ.mass <- ggplot(prey_details_df, aes(x = mass_update, y = kJ_net)) +
+# cal_net ~ mass_update
+cal.mass <- ggplot(prey_details_df, aes(x = mass_update, y = cal_net)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(x = "mass_update", y = "net kJ") +
+  labs(x = "mass_update", y = "net calories") +
   theme_minimal()
 
-# kJ_net ~ lv
-kJ.lv <- ggplot(prey_details_df, aes(x = lv, y = kJ_net)) +
+# cal_net ~ lv
+cal.lv <- ggplot(prey_details_df, aes(x = lv, y = cal_net)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(y = "net kJ", x = "lv") +
+  labs(y = "net calories", x = "lv") +
   theme_minimal()
 
 # cost ~ generation
-cost.gen <- ggplot(prey_details_df, aes(x = generation, y = cost)) +
+cost.gen <- ggplot(prey_details_df, aes(x = generation, y = costs)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(y = "metabolic costs", y = "generation") +
+  labs(y = "metabolic costs (cal)", y = "generation") +
   theme_minimal()
 
 # cost ~ mass_update
-cost.mass <- ggplot(prey_details_df, aes(x = mass_update, y = cost)) +
+cost.mass <- ggplot(prey_details_df, aes(x = mass_update, y = costs)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(y = "metabolic costs", y = "mass_update") +
+  labs(y = "metabolic costs (cal)", y = "mass_update") +
   theme_minimal()
 
 # cost ~ speed
-cost.speed <- ggplot(prey_details_df, aes(x = speed, y = cost)) +
+cost.speed <- ggplot(prey_details_df, aes(x = speed, y = costs)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(y = "metabolic costs", y = "speed") + 
+  labs(y = "metabolic costs (cal)", y = "speed (m/s)") + 
   theme_minimal()
 
 # speed ~ generation
 speed.gen <- ggplot(prey_details_df, aes(x = generation, y = speed)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(y = "speed", x = "generation") +
+  labs(y = "speed (m/s)", x = "generation") +
   theme_minimal()
 
-# speed ~ kJ_net 
-speed.kJ <- ggplot(prey_details_df, aes(x = kJ_net, y = speed)) +
+# speed ~ cal_net 
+speed.cal <- ggplot(prey_details_df, aes(x = cal_net, y = speed)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(x = "net kJ", y = "speed") +
+  labs(x = "net calories", y = "speed (m/s)") +
   theme_minimal()
 
 # speed ~ lv
 speed.lv <- ggplot(prey_details_df, aes(x = lv, y = speed)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(y = "speed", x = "lv") +
+  labs(y = "speed (m/s)", x = "lv") +
   theme_minimal()
 
 # speed ~ mass_update
@@ -391,124 +380,50 @@ offspring.lv <- ggplot(prey_details_df, aes(x = lv, y = offspring)) +
   labs(y = "offspring", x = "lv") +
   theme_minimal()
 
-# offspring ~ kJ_net
-offspring.kJ <- ggplot(prey_details_df, aes(x = kJ_net, y = offspring)) +
+# offspring ~ cal_net
+offspring.cal <- ggplot(prey_details_df, aes(x = cal_net, y = offspring)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(y = "offspring", x = "net kJ") +
+  labs(y = "offspring", x = "net calories") +
   theme_minimal()
 
 # offspring ~ mass_update
 offspring.mass <- ggplot(prey_details_df, aes(x = mass_update, y = offspring)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(y = "offspring", x = "mass_update") +
+  labs(y = "offspring", x = "mass_update (g)") +
   theme_minimal()
 
 # mass ~ gen
 mass.gen <- ggplot(prey_details_df, aes(x = generation, y = mass_update)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(y = "mass_updated", x = "generation") +
+  labs(y = "mass_updated (g)", x = "generation") +
   theme_minimal()
-
-# kJ scaled vs unscaled ~ generation 
-kJsc.kJunsc <- ggplot(prey_details_df, aes(x = generation)) +
-  geom_line(aes(y = kJ_gross, color = "kJ gross scaled")) +
-  geom_line(aes(y = kJ_gross_unsc, color = "kJ gross unscaled")) +
-  scale_color_manual(values = c("kJ gross scaled" = "steelblue4", "kJ gross unscaled" = "tomato4")) +
-  labs(x = "generation", y = "kJ gained", color = "Legend") +
-  theme_minimal()
-
-print(kJsc.kJunsc)
 
 plots <- list(rel.lv.gen,
               taup.gen,
               tauv.gen,
               sig.gen,
-              lv.mass,
               patches.gen,
-              patches.lv,
-              patches.speed,
-              patches.off,
-              kJ.gen,
-              kJ.mass,
-              kJ.lv,
               cost.gen,
-              cost.mass,
-              cost.speed,
-              speed.gen,
-              speed.kJ,
-              speed.lv,
-              speed.mass,
               offspring.gen,
-              offspring.speed,
+              cal.gen,
+              mass.gen,
+              speed.gen,
+              patches.lv,
+              speed.lv,
+              cal.lv,
               offspring.lv,
-              offspring.kJ,
+              patches.speed,
+              cost.speed,
+              offspring.speed,
+              cal.mass,
+              lv.mass,
+              speed.mass,
               offspring.mass,
-              mass.gen)
+              cost.mass,
+              speed.cal,
+              offspring.cal,
+              patches.off)
+
 
 final.plot <- wrap_plots(plots, ncol = 5)
 print(final.plot)
-
-#prey lv and fitness
-# Prepare filtered data (offspring != 0)
-DATA <- prey_details_df[which(prey_details_df$offspring != 0), ]
-
-# Round lv for aggregation
-prey_details_df$lv2 <- round(prey_details_df$lv, 2)
-# Aggregate offspring mean by lv2
-AGG <- aggregate(offspring ~ lv2, data = prey_details_df, FUN = mean)
-
-# Check if offspring varies enough to fit model
-if(length(unique(AGG$offspring)) > 1) {
-  FIT <- nls(offspring ~ a * (lv2 + c) * exp(-b * (lv2 + c)),
-             start = list(a = 6, b = 0.1, c = -2),
-             data = AGG)
-  
-  ricker <- function(x) {
-    coef(FIT)[1] * (x + coef(FIT)[3]) * exp(-coef(FIT)[2] * (x + coef(FIT)[3]))
-  }
-  
-  x <- seq(min(prey_details_df$lv2), max(prey_details_df$lv2), 0.01)
-  y <- ricker(x)
-  
-  plot(offspring ~ lv,
-       data = DATA,
-       pch = 20,
-       col = adjustcolor("grey70", alpha = 0.4),
-       xlab = "Ballistic lengthscale (m)",
-       ylab = "Prey fitness (offspring)")
-  
-  points(offspring ~ lv2,
-         data = AGG,
-         pch = 20,
-         col = adjustcolor("blue", alpha = 0.8))
-  
-  # Add fitted curve only if FIT exists
-  lines(x, y, col = "steelblue", lwd = 2)
-  
-} else {
-  # No variation: just plot raw and aggregated data
-  plot(offspring ~ lv,
-       data = DATA,
-       pch = 20,
-       col = adjustcolor("grey70", alpha = 0.4),
-       xlab = "Ballistic lengthscale (m)",
-       ylab = "Prey fitness (offspring)")
-  
-  points(offspring ~ lv2,
-         data = AGG,
-         pch = 20,
-         col = adjustcolor("blue", alpha = 0.8))
-  
-  message("Skipped nonlinear fit: insufficient variation in offspring")
-}
-
-# Add mean and variance shading in both cases
-mu <- mean(DATA$lv, na.rm = TRUE)
-sig <- var(DATA$lv, na.rm = TRUE)
-
-abline(v = mu, col = '#046C9A', lty = 'dashed')
-rect(xleft = mu - sig, xright = mu + sig,
-     ybottom = par("usr")[3], ytop = par("usr")[4], 
-     border = NA,
-     col = adjustcolor("#046C9A", alpha = 0.3))
-

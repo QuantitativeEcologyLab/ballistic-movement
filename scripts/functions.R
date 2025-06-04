@@ -1,31 +1,32 @@
 # This scripts generates the functions necessary for carrying out the 
 # simulation study aimed at exploring the evolution of ballistic motion
 
-# Written by Michael Noonan and Lynndsay Terpsma
 
-# Last updated: May 30th 2025
+#Written by Michael Noonan and Lynndsay Terpsma
 
-#--------------------------------------------------------------------------
-# Import packages ---------------------------------------------------------
-#--------------------------------------------------------------------------
+#Last updated: June 4th 2025
+
+
+#----------------------------------------------------------------------
+# Package import
 
 library(ctmm)
 library(raster)
 library(terra)
 
-#--------------------------------------------------------------------------
-# Calculate the euclidean distance between two points ---------------------
-#--------------------------------------------------------------------------
+#----------------------------------------------------------------------
+# Calculate the euclidean distance between two points----
+#----------------------------------------------------------------------
 
 SLD <- function(x_1, y_1, x_2, y_2){
   sqrt((x_1 - x_2)^2 + (y_1 - y_2)^2)
 }
 
-#--------------------------------------------------------------------------
-# Generate prey movement model based on prey mass (in g) ------------------
-#--------------------------------------------------------------------------
+#----------------------------------------------------------------------
+# Generate prey movement model based on prey mass (in g)----
+#----------------------------------------------------------------------
 
-## Model comes from Noonan et al. 2020  https://doi.org/10.1111/cobi.13495
+# Model comes from Noonan et al. 2020  https://doi.org/10.1111/cobi.13495
 
 prey.mod <- function(mass, mu = c(0,0), variance = FALSE){
   #Calculate
@@ -61,11 +62,11 @@ prey.mod <- function(mass, mu = c(0,0), variance = FALSE){
   return(mod)
 }
 
-#--------------------------------------------------------------------------
-# Generate prey movement model based on prey mass (in g) ------------------
-#--------------------------------------------------------------------------
+#----------------------------------------------------------------------
+# Generate prey var[position] based on mass (in g)----
+#----------------------------------------------------------------------
 
-## Model comes from Noonan et al. 2020  https://doi.org/10.1111/cobi.13495
+# Model comes from Noonan et al. 2020  https://doi.org/10.1111/cobi.13495
 
 prey.SIG <- function(mass, variance = FALSE) {
   #Calculate
@@ -80,9 +81,9 @@ prey.SIG <- function(mass, variance = FALSE) {
   return(SIG)
 }
 
-#--------------------------------------------------------------------------
-# Generate prey E[tau_p] based on mass (in g) -----------------------------
-#--------------------------------------------------------------------------
+#----------------------------------------------------------------------
+# Generate prey E[tau_p] based on mass (in g)----
+#----------------------------------------------------------------------
 
 # Model comes from Noonan et al. 2020  https://doi.org/10.1111/cobi.13495
 
@@ -97,9 +98,9 @@ prey.tau_p <- function(mass, variance = FALSE) {
   return(tau_p)
 }
 
-#---------------------------------------------------------------------------
-# Generate prey E[tau_v] based on mass (in g) ------------------------------
-#---------------------------------------------------------------------------
+#----------------------------------------------------------------------
+# Generate prey E[tau_v] based on mass (in g)----
+#----------------------------------------------------------------------
 
 # Model comes from Noonan et al. 2020  https://doi.org/10.1111/cobi.13495
 
@@ -114,9 +115,9 @@ prey.tau_v <- function(mass, variance = FALSE) {
   return(tau_v)
 }
 
-#--------------------------------------------------------------------------
-# Generate predator var[position] based on mass (in g) --------------------
-#--------------------------------------------------------------------------
+#----------------------------------------------------------------------
+# Generate predator var[position] based on mass (in g)----
+#----------------------------------------------------------------------
 
 # Model comes from Noonan et al. 2020  https://doi.org/10.1111/cobi.13495
 
@@ -133,9 +134,10 @@ pred.SIG <- function(mass, variance = FALSE) {
   return(SIG)
 }
 
-#--------------------------------------------------------------------------
-# Generate predator E[tau_p] based on mass (in g) -------------------------
-#--------------------------------------------------------------------------
+
+#----------------------------------------------------------------------
+# Generate predator E[tau_p] based on mass (in g)----
+#----------------------------------------------------------------------
 
 # Model comes from Noonan et al. 2020  https://doi.org/10.1111/cobi.13495
 
@@ -150,12 +152,25 @@ pred.tau_p <- function(mass, variance = FALSE) {
   return(tau_p)
 }
 
-#--------------------------------------------------------------------------
-# Generate predator E[tau_v] based on mass (in g) -------------------------
-#--------------------------------------------------------------------------
-#--------------------------------------------------------------------------
-# Generate E[mass_prey] based on mass_pred (in g) -------------------------
-#--------------------------------------------------------------------------
+#----------------------------------------------------------------------
+# Generate predator E[tau_v] based on mass (in g)----
+#----------------------------------------------------------------------
+
+# Model comes from Noonan et al. 2020  https://doi.org/10.1111/cobi.13495
+
+pred.tau_v <- function(mass, variance = FALSE) {
+  #Calculate
+  tau_v <- -0.1005302 + 0.7403169*log10(mass)
+  #Back transform
+  tau_v <- 10^(tau_v)
+  #Add variance if desired
+  if(variance == TRUE){tau_v <- rchisq(n = length(mass), df = tau_v)}
+  #Return
+  return(tau_v)
+}
+#----------------------------------------------------------------------
+# Generate E[mass_prey] based on mass_pred (in g)----
+#----------------------------------------------------------------------
 
 # Model comes from Tucker & Rogers 2014  https://doi.org/10.1371/journal.pone.0106402
 
@@ -174,18 +189,13 @@ prey.mass <- function(mass, variance = FALSE) {
   return(prey_mass)
 }
 
-#--------------------------------------------------------------------------
-# Generate raster of food patches based on mass_prey (g) ------------------
-#--------------------------------------------------------------------------
+#----------------------------------------------------------------------
+# Generate raster of food patches based on mass_prey (g)----
+#----------------------------------------------------------------------
 
-createFoodRaster <- function(mass, pred = FALSE, 
-                             patch_width = 20,
-                             fctr = 15,
+createFoodRaster <- function(mass, width = 20, pred = FALSE, 
+                             calories = 2125, 
                              heterogeneity = FALSE) {
-
-  #calculate kJ per patch based on BMR
-  BMR <- 4.17 * (mass)^(0.67)
-  kJ <- 0.02 * BMR^1.1
   
   #var[position]
   if(pred){SIG <- pred.SIG(mass)} else{
@@ -195,88 +205,63 @@ createFoodRaster <- function(mass, pred = FALSE,
   EXT <- round(sqrt((-2*log(0.0001)*pi)* SIG))
   
   #number of patches based on fixed patch width
-  N <- EXT/patch_width
- 
+  N <- ceiling(2*EXT/width)
+  
   #create raster with terra
-  kJ_raster <- rast(ncol = N, nrow = N,
+  biomass_raster <- rast(ncol = N, nrow = N,
                          xmin = -EXT, xmax = EXT,
-                         ymin = -EXT, ymax = EXT)  
+                         ymin = -EXT, ymax = EXT)
   
   #assign biomass values to raster
   if (heterogeneity) {
-    variation <- runif(ncell(kJ_raster), min = 0.1, max = 1.5) 
-    terra::values(kJ_raster) <- variation * kJ
+    values(biomass_raster) <- runif(ncell(biomass_raster), 
+                                    min = 0.1, max = 1.5) 
   } else {
-    terra::values(kJ_raster) <- rep(kJ, terra::ncell(kJ_raster))
+    values(biomass_raster) <- 1
   }
-
-  # assign attributes
-  attr(kJ_raster, "kJ_per_kg") <- kJ
-  attr(kJ_raster, "patch_width") <- patch_width
+  
+  #assign calorie values to raster by convert biomass
+  calorie_raster <- biomass_raster * calories
+  
+  #assign attributes
+  attr(calorie_raster, "biomass") <- biomass_raster
+  attr(calorie_raster, "cal_per_kg") <- calories
   
   #return calorie raster
-  return(kJ_raster)
+  return(calorie_raster)
 }
 
-#--------------------------------------------------------------------------
-# Count the number of patches visited (assumes immediate renewal) ---------
-#--------------------------------------------------------------------------
 
-grazing <- function(track, habitat, mass, speed) {
+#----------------------------------------------------------------------
+# Count the number of patches visited (assumes immediate renewal)----
+#----------------------------------------------------------------------
+
+grazing <- function(track, habitat, metric = "ids") {
   
   #convert track to data frame
   coords <- data.frame(x = track$x, y = track$y)
   
   #patch identities
   IDs <- cellFromXY(habitat, coords)
-  patch_values <- terra::extract(habitat, coords)[,1]
   
   #count the number of times it moved to a new food patch
-  NEW_PATCHES <- c(TRUE, diff(IDs) != 0)
+  PATCHES <- sum(diff(IDs) != 0)
   
-  #calculate time per patch
-  rle_ids <- rle(IDs)
-  TIME <- rle_ids$lengths
-  entered_cells <- rle_ids$values
-  entered_values <- habitat[][entered_cells]
+  #mean time between patches 
+  TIME <- mean(rle(c(FALSE, diff(IDs) != 0))$lengths)
   
-  #calculate path length
-  steps <- sqrt(diff(coords$x)^2 + diff(coords$y)^2)
-  path <- sum(steps, na.rm = TRUE)
-  
-  # maximum metabolisable energy intake rate (kJ/sec)
-  kJ_day <- 1713 * (mass / 1000)^0.72
-  kJ_rate <- kJ_day / 86400  # per second
-  kJ_rate <- kJ_rate * 2 #double to allow more feeding?
-  
-  timestep <- max(1, round(prey.tau_v(mass)))
-  TIME_sec <- TIME * timestep
-  
-  #speed_penalty <- exp(-0.5 * speed^2)
-  
-  patch_intake <- pmin(entered_values, TIME_sec * kJ_rate ) #* speed penalty
-  
-  #sum total caloric gain
-  kJ_gross <- sum(patch_intake, na.rm = TRUE)
-  
-  #assign attributes
-  attr(kJ_gross, "patches") <- sum(NEW_PATCHES)
-  attr(kJ_gross, "total_time_calc") <- sum(TIME) * timestep
-  attr(kJ_gross, "ids") <- IDs
-  attr(kJ_gross, "kJ_gross_unsc") <- sum(entered_values)
-  attr(kJ_gross, "time_per_patch") <- TIME_sec
-  attr(kJ_gross, "patch_intake") <- patch_intake
-  attr(kJ_gross, "path_length") <- path
-  
-  #return calories
-  return(kJ_gross)
+  #return values
+  if(metric == "patches"){return(PATCHES)}
+  if(metric == "time"){return(TIME)}
+  if(metric == "ids") {return(IDs)}
+  stop("Invalid metric. Use 'patches', 'time' or 'ids'.")
 }
 
-#---------------------------------------------------------------------------
-# extract speed ------------------------------------------------------------
-#---------------------------------------------------------------------------
+#----------------------------------------------------------------------
+# extract speed----
+#----------------------------------------------------------------------
 
-speed_val <- function(models, mass){
+speed_val <- function(models){
   #extract movement speeds from the models
   model_summary <- summary(models, units = FALSE)
   
@@ -287,116 +272,109 @@ speed_val <- function(models, mass){
     SPEED <- Inf
   }
   
-  # Maximum running speed in km/hr from Hirt et al. 2017 https://doi.org/10.1038/s41559-017-0241-4
-  v_max <- 25.5 * (mass/1000)^(0.26) * (1 - exp(-22*(mass/1000)^(-0.66)))
-  
-  #Convert to m/s
-  v_max <- v_max/3.6
-  v_max_cap <- v_max * 0.3 #assume 30% maximum speed for foraging
-  
-  SPEED <- pmin(SPEED, v_max_cap)
-  
   #return speed
   return(SPEED)
 }
 
-#--------------------------------------------------------------------------
-# define "lifespan" and sampling interval ---------------------------------
-#--------------------------------------------------------------------------
+#----------------------------------------------------------------------
+# define "lifespan" and sampling interval----
+#----------------------------------------------------------------------
 
 #sampling function with lifespan scaled to body mass
 
-sampling <- function(mass) {
+sampling <- function(mass, metric = "t") {
   
   #calculate lifespan in seconds from de Magalhaes et al (2008) https://doi.org/10.1093/gerona/62.2.149
   lifespan <- (4.88*mass^0.153) * 31536000 # years to seconds
-  time_total <- lifespan * 0.001 # 1/1000 of a lifespan
+  lifespan_int <- lifespan * 0.001 # 1/1000 of a lifespan
   
   #sampling interval (tau_v) in seconds
   interval <- max(1, round(prey.tau_v(mass)))
   
   #lifespan and sampling interval for simulations
   t <- seq(0,
-           time_total,
+           lifespan_int,
            interval)
   
-  #assign attributes
-  attr(t, "lifespan") <- lifespan
-  attr(t, "time_total") <- time_total
-  
   #return vector of sampling times
-  return(t)
+  if(metric == "t"){return(t)}
+  if(metric == "lifespan"){return(lifespan)}
+  if(metric == "interval"){return(interval)}
+  stop("Invalid metric. Use 't' or 'offspring' or 'lifespan'.")
 }
 
-#--------------------------------------------------------------------------
-# net calories from grazing -----------------------------------------------
-#--------------------------------------------------------------------------
+#----------------------------------------------------------------------
+# net calories from grazing----
+#----------------------------------------------------------------------
 
-net_kJ_val <- function(kJ_gross, habitat, mass, speed, t){
+cals_net <- function(IDs, habitat, mass, models, speed, interval){
   
-  time_total <- attr(t, "time_total")
+  #extract calorie values from which the movement track overlaps
+  patch_values <- values(habitat)[IDs]
   
-  #BMR from White & Seymour (2002) in ml O2/h https://doi.org/10.1073/pnas.0436428100
-  BMR <- 4.17 * (mass)^(0.67)
-  #convert from ml O2/h to ml O2/s
-  BMR <- BMR * (1/3600)
-  #convert from ml O2/s to J/s
-  BMR <- BMR * 20.1
-  #convert to kJ/s
-  BMR <- BMR / 1000
+  #assign the sum of calorie values as the gross_gain
+  cal_gross <- sum(patch_values, na.rm = TRUE)
   
-  # calculate total BMR cost over sample period (kJ)
+  #metabolic rate (kj/day) from Nagy 1987 https://doi.org/10.2307/1942620
+  BMR <- 0.774 + 0.727 * log10(mass)
+  #back transform
+  BMR <- 10^BMR
+  #convert to cal/s
+  BMR <- (BMR * 239.005736) / 86400
+  
+  #time window
+  lifespan <- (4.88 * mass^0.153) * 31536000 #years to seconds
+  time_total <- lifespan * 0.001 # 1/1000 of a lifespan
+  
+  #calculate total BMR cost over sample period 
   BMR_cost <- BMR * time_total
   
-  # calculate movement cost (watts) from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1
-  E <- (10.7 * (mass / 1000)^(0.684) * speed) + (6.03 * (mass / 1000)^(0.697))
+  #calculate movement cost (watts/kg) from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1
+  E <- 10.7 * (mass / 1000)^(-0.316) * speed + 6.03 * (mass / 1000)^(-0.303)
   #convert to kJ/s
-  E <- E / 1000
+  E <- (E * mass/1000)/1000
+  #convert to cal/s
+  E <- E * 239.005736
   
-  #extract movement data
-  total_distance_m <- attr(kJ_gross, "path_length")
+  #extract number of movements made
+  num_movements <- sum(diff(IDs) != 0)
   
-  #if speed is given as a single mean value from the total travel,
-  #then using the total_time to convert energy (kJ/s) to kJ?
-  move_cost <- E * time_total
+  #calculate total movement costs
+  move_cost <- num_movements * E * interval #prey.tau_p(mass) instead of prey.tau_v(mass)?
   
-  # calculate total energetic costs in kJ
+  #calculate total energetic costs
   cost_total <- BMR_cost + move_cost
   
   #assign net calories
-  kJ_net <- kJ_gross - cost_total
+  cal_net <- cal_gross - cost_total
   
   #return cal_net and cal_max
-  return(list(kJ_net = kJ_net, 
-              kJ_gross = kJ_gross,
-              cost = cost_total))
+  return(list(cal_net = cal_net, costs = cost_total))
 }
 
-#--------------------------------------------------------------------------
-# Prey fitness function ---------------------------------------------------
-#--------------------------------------------------------------------------
+#----------------------------------------------------------------------
+# Prey fitness function----
+#----------------------------------------------------------------------
 
 #calculate fitness 
 prey.fitness <- function(mass, 
-                         kJ_net,
+                         cal_net,
                          costs = NULL) 
 {
   #standardize mass input
   if (length(mass) == 1) mass <- rep(mass, n_prey)
   
   #update weight
-  kJ_net[kJ_net < 0] <- 0 #prevent negative
-  growth_kJ <- kJ_net*0.6 #allocation to soma
-  repro_kJ <- kJ_net*0.4 #allocation to reproduction
+  cal_net[cal_net < 0] <- 0 #prevent negative
+  growth_cal <- cal_net*0.8 #allocation to soma
+  repro_cal <- cal_net*0.2 #allocation to reproduction
   
-  #assume 5 kJ/g (wet) of weight gain
-  weight.gain <- growth_kJ / 10
+  weight.gain <- growth_cal / 15
   mass.update <- mass + weight.gain
   
   #using mass allocated to reproduction to determine W_R
-  # assume 20 kJ/g (dry)
-  W_R <- repro_kJ / 20
-
+  W_R <- repro_cal / 15
+  
   #birth weight via allometric scaling in mammals from Blueweiss et al. 1978 https://doi.org/10.1007/BF00344996
   #wet weight $\approx$ 0.75 total weight
   ##therefore dry mass $\approx$ 0.25 from Fusch et al. 1999 https://doi.org/10.1203/00006450-199910000-00018
@@ -404,9 +382,9 @@ prey.fitness <- function(mass,
   
   #total offspring based on updated mass
   offspring <- floor(W_R/W_B0) 
- 
+  
   #set offspring to 0 is cal_net <= 0
-  offspring[kJ_net <= 0] <- 0
+  offspring[cal_net <= 0] <- 0
   
   #If predator encounters are being considered,
   #individuals that encountered a predator are killed and don't reproduce.
@@ -420,9 +398,9 @@ prey.fitness <- function(mass,
   return(list(offspring = offspring, mass_update = mass.update))
 }
 
-#--------------------------------------------------------------------------
-# Identify Encounter Events -----------------------------------------------
-#--------------------------------------------------------------------------
+#----------------------------------------------------------------------
+# Identify Encounter Events
+#----------------------------------------------------------------------
 
 encounter <- function(prey.tracks, pred.tracks, range = 50){
   distances <- list()
@@ -438,9 +416,9 @@ encounter <- function(prey.tracks, pred.tracks, range = 50){
   return(encounters)
 }
 
-#--------------------------------------------------------------------------
-# Predator fitness function -----------------------------------------------
-#--------------------------------------------------------------------------
+#----------------------------------------------------------------------
+# Predator fitness function
+#----------------------------------------------------------------------
 
 pred.fitness <- function(encounters, mass, costs = NULL, models, time = t, calories = 10, constant = 1){
   
@@ -488,3 +466,7 @@ pred.fitness <- function(encounters, mass, costs = NULL, models, time = t, calor
   
   return(offspring)
 }
+
+#----------------------------------------------------------------------
+# 
+#----------------------------------------------------------------------
