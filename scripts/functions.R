@@ -193,7 +193,7 @@ prey.mass <- function(mass, variance = FALSE) {
 # Generate raster of food patches based on mass_prey (g)----
 #----------------------------------------------------------------------
 
-createFoodRaster <- function(mass, width = 20, pred = FALSE, 
+createFoodRaster <- function(mass, width, pred = FALSE, 
                              calories = 2125, 
                              heterogeneity = FALSE) {
   
@@ -207,28 +207,21 @@ createFoodRaster <- function(mass, width = 20, pred = FALSE,
   #number of patches based on fixed patch width
   N <- ceiling(2*EXT/width)
   
+  patch_area <- width^2
+  
   #create raster with terra
-  biomass_raster <- rast(ncol = N, nrow = N,
+  food_raster <- rast(ncol = N, nrow = N,
                          xmin = -EXT, xmax = EXT,
                          ymin = -EXT, ymax = EXT)
   
   #assign biomass values to raster
   if (heterogeneity) {
-    values(biomass_raster) <- runif(ncell(biomass_raster), 
-                                    min = 0.1, max = 1.5) 
+    values(food_raster) <- runif(ncell(food_raster), min = 0.1, max = 1.5) * calories * patch_area
   } else {
-    values(biomass_raster) <- 1
+    values(food_raster) <- calories * patch_area
   }
-  
-  #assign calorie values to raster by convert biomass
-  calorie_raster <- biomass_raster * calories
-  
-  #assign attributes
-  attr(calorie_raster, "biomass") <- biomass_raster
-  attr(calorie_raster, "cal_per_kg") <- calories
-  
   #return calorie raster
-  return(calorie_raster)
+  return(food_raster)
 }
 
 
@@ -247,14 +240,19 @@ grazing <- function(track, habitat, metric = "ids") {
   #count the number of times it moved to a new food patch
   PATCHES <- sum(diff(IDs) != 0)
   
+  # calculate path length
+  steps <- sqrt(diff(coords$x)^2 + diff(coords$y)^2)
+  path <- sum(steps, na.rm = TRUE)
+  
   #mean time between patches 
   TIME <- mean(rle(c(FALSE, diff(IDs) != 0))$lengths)
   
-  #return values
-  if(metric == "patches"){return(PATCHES)}
-  if(metric == "time"){return(TIME)}
-  if(metric == "ids") {return(IDs)}
-  stop("Invalid metric. Use 'patches', 'time' or 'ids'.")
+  #attributes
+  attr(IDs, "path_lenth") <- path
+  attr(IDs, "patches") <- PATCHES
+  attr(IDs, "time") <- TIME
+ 
+  return(IDs) 
 }
 
 #----------------------------------------------------------------------
@@ -282,32 +280,36 @@ speed_val <- function(models){
 
 #sampling function with lifespan scaled to body mass
 
-sampling <- function(mass, metric = "t") {
+sampling <- function(mass) {
   
   #calculate lifespan in seconds from de Magalhaes et al (2008) https://doi.org/10.1093/gerona/62.2.149
   lifespan <- (4.88*mass^0.153) * 31536000 # years to seconds
-  lifespan_int <- lifespan * 0.001 # 1/1000 of a lifespan
+  time_total <- lifespan * 0.001 # 1/1000 of a lifespan
   
   #sampling interval (tau_v) in seconds
   interval <- max(1, round(prey.tau_v(mass)))
   
   #lifespan and sampling interval for simulations
   t <- seq(0,
-           lifespan_int,
+           time_total,
            interval)
   
-  #return vector of sampling times
-  if(metric == "t"){return(t)}
-  if(metric == "lifespan"){return(lifespan)}
-  if(metric == "interval"){return(interval)}
-  stop("Invalid metric. Use 't' or 'offspring' or 'lifespan'.")
+  # assign attributes
+  attr(t, "interval") <- interval
+  attr(t, "lifespan") <- lifespan
+  attr(t, "time_total") <- time_total
+  
+  return(t)
 }
 
 #----------------------------------------------------------------------
 # net calories from grazing----
 #----------------------------------------------------------------------
 
-cals_net <- function(IDs, habitat, mass, models, speed, interval){
+cals_net <- function(IDs, habitat, mass, models, speed, t){
+  
+  interval <- attr(t, "interval")
+  time_total <- attr(t, "time_total")
   
   #extract calorie values from which the movement track overlaps
   patch_values <- values(habitat)[IDs]
@@ -322,10 +324,6 @@ cals_net <- function(IDs, habitat, mass, models, speed, interval){
   #convert to cal/s
   BMR <- (BMR * 239.005736) / 86400
   
-  #time window
-  lifespan <- (4.88 * mass^0.153) * 31536000 #years to seconds
-  time_total <- lifespan * 0.001 # 1/1000 of a lifespan
-  
   #calculate total BMR cost over sample period 
   BMR_cost <- BMR * time_total
   
@@ -337,10 +335,11 @@ cals_net <- function(IDs, habitat, mass, models, speed, interval){
   E <- E * 239.005736
   
   #extract number of movements made
-  num_movements <- sum(diff(IDs) != 0)
+  path <- attr(ids, "path_length")
   
   #calculate total movement costs
-  move_cost <- num_movements * E * interval #prey.tau_p(mass) instead of prey.tau_v(mass)?
+  #cal/s to cal*m to cal
+  move_cost <- E * time_total / path 
   
   #calculate total energetic costs
   cost_total <- BMR_cost + move_cost
