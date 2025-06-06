@@ -205,7 +205,8 @@ createFoodRaster <- function(mass, width, pred = FALSE,
   EXT <- round(sqrt((-2*log(0.0001)*pi)* SIG))
   
   #number of patches based on fixed patch width
-  N <- ceiling(2*EXT/width)
+  #N <- ceiling(2*EXT/width)
+  N <- EXT / width
   
   patch_area <- width^2
   
@@ -229,7 +230,7 @@ createFoodRaster <- function(mass, width, pred = FALSE,
 # Count the number of patches visited (assumes immediate renewal)----
 #----------------------------------------------------------------------
 
-grazing <- function(track, habitat, metric = "ids") {
+grazing <- function(track, habitat) {
   
   #convert track to data frame
   coords <- data.frame(x = track$x, y = track$y)
@@ -248,7 +249,7 @@ grazing <- function(track, habitat, metric = "ids") {
   TIME <- mean(rle(c(FALSE, diff(IDs) != 0))$lengths)
   
   #attributes
-  attr(IDs, "path_lenth") <- path
+  attr(IDs, "path_length") <- path
   attr(IDs, "patches") <- PATCHES
   attr(IDs, "time") <- TIME
  
@@ -335,11 +336,12 @@ cals_net <- function(IDs, habitat, mass, models, speed, t){
   E <- E * 239.005736
   
   #extract number of movements made
-  path <- attr(ids, "path_length")
+  path <- attr(IDs, "path_length")
+  move_time <- path / speed
   
   #calculate total movement costs
-  #cal/s to cal*m to cal
-  move_cost <- E * time_total / path 
+  #cal/s to cal to cal
+  move_cost <- E * move_time
   
   #calculate total energetic costs
   cost_total <- BMR_cost + move_cost

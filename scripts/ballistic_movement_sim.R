@@ -5,7 +5,7 @@
 # Set the working directory
 setwd("~/ballisticmovement/ballistic-movement/scripts")
 # Set the random seed
-set.seed(1)
+set.seed(123)
 
 # Import necessary packages
 library(extraDistr)
@@ -28,7 +28,6 @@ mass_prey <- 1000
 
 #set sampling interval and lifespan
 t <- sampling(mass_prey)
-interval <- sampling(mass_prey, metric = "interval")
 
 #number of individuals in arena
 n_prey <- 5
@@ -40,7 +39,7 @@ REPS <- 1
 GENS <- 2
 
 #build food raster
-FOOD <- createFoodRaster(mass_prey, calories = 0, width = round(sqrt(prey.SIG(mass_prey)))/15)
+FOOD <- createFoodRaster(mass_prey, calories = 3, width = round(sqrt(prey.SIG(mass_prey)))/10)
 plot(FOOD, col = "steelblue")
 grid(nx = ncol(FOOD), ny = nrow(FOOD), col = "black", lty = "dotted")
 
@@ -49,6 +48,7 @@ prey_res <- list()
 prey_details <- list()
 
 for(G in 1:GENS) {
+  tic(paste("Generation", G))
   
   prey <- list()
   
@@ -105,7 +105,7 @@ for(G in 1:GENS) {
     #extract ids of patches entered
     benefits_prey <- vector("list", n_prey)
     for(i in 1:n_prey){
-      benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD, metric = "ids")
+      benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD)
     }
     
     #extract number of changes between patches
@@ -210,18 +210,13 @@ for(G in 1:GENS) {
     if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
     warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
     
-    save(prey_res, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_1000g_prey_res.Rda')
-    save(prey_details, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_1000g_prey_details.Rda')
-    
     break
-  }
-  
-  #Save prey results
-  save(prey_res, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_1000g_prey_res.Rda')
-  save(prey_details, file = '~/ballisticmovement/ballistic-movement/sim_results/lv_Evo_1000g_prey_details.Rda')
+    }
   
   #progress report
   print(G)
+  
+  toc(log = TRUE)
 }
 
 
