@@ -233,6 +233,9 @@ print(prey_details)
 # make diagnostic figures----
 #----------------------------------------------------------------------
 
+load("H:/GitHub/ballistic-movement/sim_results/constant_resources_nopred_varycalories/June6_lv_Evo_30000g_5cal_prey_details.Rda")
+load("H:/GitHub/ballistic-movement/sim_results/constant_resources_nopred_varycalories/June6_lv_Evo_30000g_5cal_prey_res.Rda")
+
 #make data sets compatible
 prey_res_df <- do.call(rbind, prey_res)
 print(prey_res_df)
@@ -276,7 +279,7 @@ sig.gen <- ggplot(prey_details_df, aes(x = generation, y = sig)) +
 # lv ~ mass_update
 lv.mass <- ggplot(prey_details_df, aes(x = generation, y = lv)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(y = "lv", x = "mass_update") +
+  labs(y = "lv", x = "mass_update (g)") +
   theme_minimal()
 
 # patches ~ generation
@@ -294,7 +297,7 @@ patches.lv <- ggplot(prey_details_df, aes(x = lv, y = patches)) +
 # number of patches ~ speed
 patches.speed <- ggplot(prey_details_df, aes(x = speed, y = patches)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(y = "patches visited", x = "speed") +
+  labs(y = "patches visited", x = "speed (m/s)") +
   theme_minimal()
 
 # patches ~ offspring
@@ -312,7 +315,7 @@ cal.gen <- ggplot(prey_details_df, aes(x = generation, y = cal_net)) +
 # cal_net ~ mass_update
 cal.mass <- ggplot(prey_details_df, aes(x = mass_update, y = cal_net)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(x = "mass_update", y = "net calories") +
+  labs(x = "mass_update (g)", y = "net calories") +
   theme_minimal()
 
 # cal_net ~ lv
@@ -360,7 +363,7 @@ speed.lv <- ggplot(prey_details_df, aes(x = lv, y = speed)) +
 # speed ~ mass_update
 speed.mass <- ggplot(prey_details_df, aes(x = mass_update, y = speed)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(y = "speed", x = "mass_update") +
+  labs(y = "speed (m/s)", x = "mass_update (g)") +
   theme_minimal()
 
 # offspring ~ generation
@@ -429,6 +432,6 @@ plots <- list(rel.lv.gen,
 final.plot <- wrap_plots(plots, ncol = 5)
 final <- final.plot + plot_annotation('30000g, 5 calories')
 print(final)
-ggsave("~/H/GitHub/ballistic-movement/sim_results/constant_resources_nopred_varycalories/figures/30000g_5cal_finalplot.PNG", plot = final, width = 15, height = 8, dpi = 800)
+ggsave("H:/GitHub/ballistic-movement/sim_results/constant_resources_nopred_varycalories/figures/30000g_5cal_finalplot.PNG", plot = final, width = 15, height = 8, dpi = 800)
 
 
