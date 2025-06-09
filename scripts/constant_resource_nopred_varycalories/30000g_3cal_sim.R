@@ -374,7 +374,7 @@ offspring.gen <- ggplot(prey_details_df, aes(x = generation, y = offspring)) +
 # offspring ~ speed
 offspring.speed <- ggplot(prey_details_df, aes(x = speed, y = offspring)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(y = "offspring", x = "speed") +
+  labs(y = "offspring", x = "speed (m/s)") +
   theme_minimal()
 
 # offspring ~ lv

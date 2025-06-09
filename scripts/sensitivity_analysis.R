@@ -59,8 +59,8 @@ run_sens <- function(mass_prey,
         
         PREY_mods <- list()
         for(i in 1:n_prey){
-          prey_tau_p <- prey.tau_p(mass_prey, variance = FALSE)
-          prey_tau_v <- prey.tau_v(mass_prey, variance = FALSE)
+          prey_tau_p <- prey.tau_p(mass_prey, variance = TRUE)
+          prey_tau_v <- prey.tau_v(mass_prey, variance = TRUE)
           prey_sig <- prey.SIG(mass_prey)
           prey_lv <- sqrt((prey_tau_v/prey_tau_p) * prey_sig)
           
@@ -100,7 +100,7 @@ run_sens <- function(mass_prey,
       #extract ids of patches entered
       benefits_prey <- vector("list", n_prey)
       for(i in 1:n_prey){
-        benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD, metric = "ids")
+        benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD)
       }
       
       #extract number of changes between patches
@@ -119,6 +119,8 @@ run_sens <- function(mass_prey,
       cal_list <- vector("list", n_prey)
       cal_net <- numeric(n_prey)
       costs <- numeric(n_prey)
+      BMR <- numeric(n_prey)
+      Move <- numeric(n_prey)
       for(i in 1:n_prey){
         mass <- if(length(mass_prey) == 1) mass_prey else mass_prey[i]
         
@@ -134,6 +136,8 @@ run_sens <- function(mass_prey,
           
           cal_net[i] <- cal_list[[i]]$cal_net
           costs[i] <- cal_list[[i]]$costs
+          BMR[i] <- cal_list[[i]]$BMR
+          Move[i] <- cal_list[[i]]$Move
           
         } else {
           cal_net[i] <- NA
@@ -174,7 +178,9 @@ run_sens <- function(mass_prey,
                               mass = mass_prey,
                               mass_update = unlist(mass_update_prey),
                               patch_width = width,
-                              calories = calories)
+                              calories = calories,
+                              BMR = BMR,
+                              Move = Move)
     }
     
     prey <- do.call(rbind, prey)
@@ -232,7 +238,7 @@ REPS <- 1
 GENS <- 5
 
 masses <- seq(1000, 10000, 1000)
-calories <- seq(50, 500, 50)
+calories <- seq(25, 500, 25)
 
 # Define your parameter combinations here
 param_grid <- expand.grid(
@@ -271,14 +277,14 @@ tic(paste("Scenario", i))
   
   all_results[[i]] <- res
   
-  save(all_results, file = "~/ballisticmovement/ballistic-movement/sens_sim_results/mass_calorie_results_width15_v6.Rda")
+  save(all_results, file = "H:/GitHub/ballistic-movement/sim_results/sensitivity/mass_calorie_results_update.Rda")
   
   toc(log = TRUE)
 }
 
 all_results_df <- bind_rows(all_results)
 
-save(all_results_df, file = "~/ballisticmovement/ballistic-movement/sens_sim_results/mass_calorie_results_width15_v6_df.Rda")
+save(all_results_df, file = "H:/GitHub/ballistic-movement/sim_results/sensitivity/mass_calorie_results_update_df.Rda)
 
 
 
