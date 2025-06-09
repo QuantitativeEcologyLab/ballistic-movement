@@ -410,20 +410,22 @@ plots <- list(rel.lv.gen,
               speed.gen,
               patches.lv,
               speed.lv,
+              patches.speed,
               cal.lv,
               offspring.lv,
-              patches.speed,
               cost.speed,
               offspring.speed,
               cal.mass,
               lv.mass,
               speed.mass,
+              speed.cal,
               offspring.mass,
               cost.mass,
-              speed.cal,
               offspring.cal,
               patches.off)
 
 
 final.plot <- wrap_plots(plots, ncol = 5)
-print(final.plot)
+final <- final.plot + plot_annotation('30000g, 3 calories')
+print(final)
+ggsave("~/H/GitHub/ballistic-movement/sim_results/constant_resources_nopred_varycalories/figures/30000g_3cal_finalplot.PNG", plot = final, width = 15, height = 8, dpi = 800)

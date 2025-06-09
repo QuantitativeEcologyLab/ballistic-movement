@@ -25,7 +25,7 @@ source("scripts/functions.R")
 #----------------------------------------------------------------------
 
 # Prey mass (g)
-mass_prey <- 30000
+mass_prey <- 1000
 
 #set sampling interval and lifespan
 t <- sampling(mass_prey)
@@ -40,7 +40,8 @@ REPS <- 5
 GENS <- 500
 
 #build food raster
-FOOD <- createFoodRaster(mass_prey, calories = 3, width = round(sqrt(prey.SIG(mass_prey)))/10)
+FOOD <- createFoodRaster(mass_prey, calories = 5, width = round(sqrt(prey.SIG(mass_prey)))/10)
+
 #lists for storing results
 prey_res <- list()
 prey_details <- list()
@@ -209,14 +210,14 @@ for(G in 1:GENS) {
     if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
     warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
     
-      save(prey_res, file = "~/H/GitHub/ballistic-movement/sim_results/June6_lv_Evo_30000g_3cal_prey_res.Rda")
-      save(prey_details, file = "~/H/GitHub/ballistic-movement/sim_results/June6_lv_Evo_30000g_3cal_prey_details.Rda")
+      save(prey_res, file = "~/H/GitHub/ballistic-movement/sim_results/June6_lv_Evo_1000g_5cal_prey_res.Rda")
+      save(prey_details, file = "~/H/GitHub/ballistic-movement/sim_results/June6_lv_Evo_1000g_5cal_prey_details.Rda")
       
     break
     }
   
-  save(prey_res, file = "~/H/GitHub/ballistic-movement/sim_results/June6_lv_Evo_30000g_3cal_prey_res.Rda")
-  save(prey_details, file = "~/H/GitHub/ballistic-movement/sim_results/June6_lv_Evo_30000g_3cal_prey_details.Rda")
+  save(prey_res, file = "~/H/GitHub/ballistic-movement/sim_results/June6_lv_Evo_1000g_5cal_prey_res.Rda")
+  save(prey_details, file = "~/H/GitHub/ballistic-movement/sim_results/June6_lv_Evo_1000g_5cal_prey_details.Rda")
   
   #progress report
   print(G)
@@ -398,6 +399,7 @@ mass.gen <- ggplot(prey_details_df, aes(x = generation, y = mass_update)) +
   labs(y = "mass_updated (g)", x = "generation") +
   theme_minimal()
 
+
 plots <- list(rel.lv.gen,
               taup.gen,
               tauv.gen,
@@ -410,20 +412,23 @@ plots <- list(rel.lv.gen,
               speed.gen,
               patches.lv,
               speed.lv,
+              patches.speed,
               cal.lv,
               offspring.lv,
-              patches.speed,
               cost.speed,
               offspring.speed,
               cal.mass,
               lv.mass,
               speed.mass,
+              speed.cal,
               offspring.mass,
               cost.mass,
-              speed.cal,
               offspring.cal,
               patches.off)
 
-
 final.plot <- wrap_plots(plots, ncol = 5)
-print(final.plot)
+final <- final.plot + plot_annotation('1000g, 5 calories')
+print(final)
+ggsave("~/H/GitHub/ballistic-movement/sim_results/constant_resources_nopred_varycalories/figures/1000g_5cal_finalplot.PNG", plot = final, width = 15, height = 8, dpi = 800)
+
+
