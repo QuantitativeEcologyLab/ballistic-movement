@@ -7,3 +7,4 @@ This project looks at the evolutionary trends in ballistic length scale under to
 **Directory**
 * `scripts/` contains the R script files for the coding of simulation models, functions, and figures.
 * `sim_results/` contains the Rda files of simulation results for later analysis
+* `figures/` contains files for simulation results
