@@ -3,7 +3,7 @@
 # Preamble ----
 
 # Set the working directory
-setwd("~/H/GitHub/ballistic-movement")
+setwd("H:/GitHub/ballistic-movement")
 # Set the random seed
 set.seed(123)
 
@@ -37,10 +37,11 @@ n_prey <- 10
 REPS <- 5
 
 #number of generations
-GENS <- 500
+GENS <- 200
 
 #build food raster
-FOOD <- createFoodRaster(mass_prey, calories = 3, width = round(sqrt(prey.SIG(mass_prey)))/10)
+FOOD <- createFoodRaster(mass_prey, calories = 15, width = round(sqrt(prey.SIG(mass_prey)))/10)
+
 #lists for storing results
 prey_res <- list()
 prey_details <- list()
@@ -122,6 +123,8 @@ for(G in 1:GENS) {
     cal_list <- vector("list", n_prey)
     cal_net <- numeric(n_prey)
     costs <- numeric(n_prey)
+    BMR <- numeric(n_prey)
+    Move <- numeric(n_prey)
     for(i in 1:n_prey){
       mass <- if(length(mass_prey) == 1) mass_prey else mass_prey[i]
       
@@ -137,6 +140,8 @@ for(G in 1:GENS) {
         
         cal_net[i] <- cal_list[[i]]$cal_net
         costs[i] <- cal_list[[i]]$costs
+        BMR[i] <- cal_list[[i]]$BMR
+        Move[i] <- cal_list[[i]]$Move
         
       } else {
         cal_net[i] <- NA
@@ -175,7 +180,9 @@ for(G in 1:GENS) {
                             speed = unlist(speed),
                             offspring = unlist(offspring_prey),
                             mass = mass_prey,
-                            mass_update = unlist(mass_update_prey))
+                            mass_update = unlist(mass_update_prey),
+                            BMR = BMR,
+                            Move = Move)
   }
   
   prey <- do.call(rbind, prey)
@@ -209,14 +216,8 @@ for(G in 1:GENS) {
     if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
     warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
     
-      save(prey_res, file = "~/H/GitHub/ballistic-movement/sim_results/June6_lv_Evo_30000g_3cal_prey_res.Rda")
-      save(prey_details, file = "~/H/GitHub/ballistic-movement/sim_results/June6_lv_Evo_30000g_3cal_prey_details.Rda")
-      
     break
     }
-  
-  save(prey_res, file = "~/H/GitHub/ballistic-movement/sim_results/June6_lv_Evo_30000g_3cal_prey_res.Rda")
-  save(prey_details, file = "~/H/GitHub/ballistic-movement/sim_results/June6_lv_Evo_30000g_3cal_prey_details.Rda")
   
   #progress report
   print(G)
@@ -234,9 +235,7 @@ print(prey_details)
 
 #make data sets compatible
 prey_res_df <- do.call(rbind, prey_res)
-print(prey_res_df)
 prey_details_df <- do.call(rbind, prey_details)
-
 
 # relative change in lv ~ generation
 PREY_LV <- prey_res_df$lv[1]
@@ -244,7 +243,7 @@ prey_res_df$rel.lv <- prey_res_df$lv/PREY_LV
 prey_res_df$rel_var <- prey_res_df$var / (PREY_LV^2)
 prey_res_df$rel_sd <- sqrt(prey_res_df$rel_var)
 
-# rel lv ~
+# rel lv ~ generation
 rel.lv.gen <- ggplot(prey_res_df, aes(x = generation, y = rel.lv)) +
   geom_line(color = "deeppink4", linewidth = 1) +
   geom_hline(yintercept = 1, color = 'grey30', linetype = "dashed") +
@@ -275,7 +274,7 @@ sig.gen <- ggplot(prey_details_df, aes(x = generation, y = sig)) +
 # lv ~ mass_update
 lv.mass <- ggplot(prey_details_df, aes(x = generation, y = lv)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(y = "lv", x = "mass_update") +
+  labs(y = "lv", x = "mass_update (g)") +
   theme_minimal()
 
 # patches ~ generation
@@ -293,7 +292,7 @@ patches.lv <- ggplot(prey_details_df, aes(x = lv, y = patches)) +
 # number of patches ~ speed
 patches.speed <- ggplot(prey_details_df, aes(x = speed, y = patches)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(y = "patches visited", x = "speed") +
+  labs(y = "patches visited", x = "speed (m/s)") +
   theme_minimal()
 
 # patches ~ offspring
@@ -311,7 +310,7 @@ cal.gen <- ggplot(prey_details_df, aes(x = generation, y = cal_net)) +
 # cal_net ~ mass_update
 cal.mass <- ggplot(prey_details_df, aes(x = mass_update, y = cal_net)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(x = "mass_update", y = "net calories") +
+  labs(x = "mass_update (g)", y = "net calories") +
   theme_minimal()
 
 # cal_net ~ lv
@@ -359,7 +358,7 @@ speed.lv <- ggplot(prey_details_df, aes(x = lv, y = speed)) +
 # speed ~ mass_update
 speed.mass <- ggplot(prey_details_df, aes(x = mass_update, y = speed)) +
   stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
-  labs(y = "speed", x = "mass_update") +
+  labs(y = "speed (m/s)", x = "mass_update (g)") +
   theme_minimal()
 
 # offspring ~ generation
@@ -398,6 +397,19 @@ mass.gen <- ggplot(prey_details_df, aes(x = generation, y = mass_update)) +
   labs(y = "mass_updated (g)", x = "generation") +
   theme_minimal()
 
+# BMR ~ generation
+BMR.gen <- ggplot(prey_details_df, aes(x = generation, y = BMR)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "BMR (cal)", x = "generation") +
+  theme_minimal()
+
+# Movement cost ~ generation
+move.gen <- gpplot(prey_details_df, aes(x = generation, y = Move)) +
+  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  labs(y = "Movement costs (cal)", x = "Generation") +
+  theme_minimal()
+
+
 plots <- list(rel.lv.gen,
               taup.gen,
               tauv.gen,
@@ -408,22 +420,24 @@ plots <- list(rel.lv.gen,
               cal.gen,
               mass.gen,
               speed.gen,
+              BMR.gen,
+              move.gen,
               patches.lv,
               speed.lv,
+              patches.speed,
               cal.lv,
               offspring.lv,
-              patches.speed,
               cost.speed,
               offspring.speed,
               cal.mass,
               lv.mass,
               speed.mass,
+              speed.cal,
               offspring.mass,
               cost.mass,
-              speed.cal,
               offspring.cal,
               patches.off)
 
-
 final.plot <- wrap_plots(plots, ncol = 5)
-print(final.plot)
+final <- final.plot + plot_annotation('30000g, 15 calories')
+print(final)

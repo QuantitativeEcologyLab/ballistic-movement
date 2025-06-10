@@ -194,7 +194,7 @@ prey.mass <- function(mass, variance = FALSE) {
 #----------------------------------------------------------------------
 
 createFoodRaster <- function(mass, width, pred = FALSE, 
-                             calories = 2125, 
+                             calories = 5, 
                              heterogeneity = FALSE) {
   
   #var[position]
@@ -212,8 +212,8 @@ createFoodRaster <- function(mass, width, pred = FALSE,
   
   #create raster with terra
   food_raster <- rast(ncol = N, nrow = N,
-                         xmin = -EXT, xmax = EXT,
-                         ymin = -EXT, ymax = EXT)
+                      xmin = -EXT, xmax = EXT,
+                      ymin = -EXT, ymax = EXT)
   
   #assign biomass values to raster
   if (heterogeneity) {
@@ -241,15 +241,20 @@ grazing <- function(track, habitat) {
   #count the number of times it moved to a new food patch
   PATCHES <- sum(diff(IDs) != 0)
   
-  # calculate path length
-  steps <- sqrt(diff(coords$x)^2 + diff(coords$y)^2)
-  path <- sum(steps, na.rm = TRUE)
-  
   #mean time between patches 
   TIME <- mean(rle(c(FALSE, diff(IDs) != 0))$lengths)
   
+  #find indices for when it moved to a new food patch
+  entry_ids <- c(1, which(diff(IDs) != 0) + 1)
+  
+  #get Ids for those patches
+  entry_IDs <- IDs[entry_ids]
+  
+  #get values from the raster
+  patch_values <- habitat[entry_IDs]
+  
   #attributes
-  attr(IDs, "path_length") <- path
+  attr(IDs, "patch_values") <- patch_values
   attr(IDs, "patches") <- PATCHES
   attr(IDs, "time") <- TIME
  
@@ -313,9 +318,7 @@ cals_net <- function(IDs, habitat, mass, models, speed, t){
   time_total <- attr(t, "time_total")
   
   #extract calorie values from which the movement track overlaps
-  patch_values <- values(habitat)[IDs]
-  
-  #assign the sum of calorie values as the gross_gain
+  patch_values <- attr(IDs, "patch_values")
   cal_gross <- sum(patch_values, na.rm = TRUE)
   
   #metabolic rate (kj/day) from Nagy 1987 https://doi.org/10.2307/1942620
@@ -335,13 +338,9 @@ cals_net <- function(IDs, habitat, mass, models, speed, t){
   #convert to cal/s
   E <- E * 239.005736
   
-  #extract number of movements made
-  path <- attr(IDs, "path_length")
-  move_time <- path / speed
-  
   #calculate total movement costs
-  #cal/s to cal to cal
-  move_cost <- E * move_time
+  #cal/s to cal 
+  move_cost <- E * time_total
   
   #calculate total energetic costs
   cost_total <- BMR_cost + move_cost
@@ -350,7 +349,7 @@ cals_net <- function(IDs, habitat, mass, models, speed, t){
   cal_net <- cal_gross - cost_total
   
   #return cal_net and cal_max
-  return(list(cal_net = cal_net, costs = cost_total))
+  return(list(cal_net = cal_net, costs = cost_total, BMR = BMR_cost, Move = move_cost))
 }
 
 #----------------------------------------------------------------------
@@ -370,11 +369,11 @@ prey.fitness <- function(mass,
   growth_cal <- cal_net*0.8 #allocation to soma
   repro_cal <- cal_net*0.2 #allocation to reproduction
   
-  weight.gain <- growth_cal / 15
+  weight.gain <- growth_cal / 2000
   mass.update <- mass + weight.gain
   
   #using mass allocated to reproduction to determine W_R
-  W_R <- repro_cal / 15
+  W_R <- repro_cal / 2000
   
   #birth weight via allometric scaling in mammals from Blueweiss et al. 1978 https://doi.org/10.1007/BF00344996
   #wet weight $\approx$ 0.75 total weight
