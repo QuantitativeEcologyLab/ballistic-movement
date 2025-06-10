@@ -343,7 +343,7 @@ cals_net <- function(IDs, habitat, mass, models, speed, t){
   move_cost <- E * time_total
   
   #calculate total energetic costs
-  cost_total <- BMR_cost + move_cost
+  cost_total <- BMR_cost * 0.2 + move_cost
   
   #assign net calories
   cal_net <- cal_gross - cost_total
@@ -369,11 +369,11 @@ prey.fitness <- function(mass,
   growth_cal <- cal_net*0.8 #allocation to soma
   repro_cal <- cal_net*0.2 #allocation to reproduction
   
-  weight.gain <- growth_cal / 2000
+  weight.gain <- growth_cal / 5000
   mass.update <- mass + weight.gain
   
   #using mass allocated to reproduction to determine W_R
-  W_R <- repro_cal / 2000
+  W_R <- repro_cal / 5000
   
   #birth weight via allometric scaling in mammals from Blueweiss et al. 1978 https://doi.org/10.1007/BF00344996
   #wet weight $\approx$ 0.75 total weight

@@ -2,7 +2,7 @@
 #preamble ----
 
 #set the working directory
-setwd("~/ballisticmovement/ballistic-movement")
+setwd("~/H/GitHub/ballistic-movement")
 
 #import necessary packages
 library(extraDistr)
@@ -232,13 +232,13 @@ run_sens <- function(mass_prey,
 n_prey <- 5
 
 #number of arenas
-REPS <- 1
+REPS <- 5
 
 #number of generations
 GENS <- 5
 
-masses <- seq(1000, 10000, 1000)
-calories <- seq(25, 500, 25)
+masses <- seq(1000, 100000, 1000)
+calories <- seq(3, 99, 3)
 
 # Define your parameter combinations here
 param_grid <- expand.grid(
@@ -246,19 +246,14 @@ param_grid <- expand.grid(
   calories = calories
 )
 
-# Prepare a list to store all results
-all_results <- list()
-
-for(i in 1:nrow(param_grid)) {
-tic(paste("Scenario", i))
-  
+all_results <- parallel::mclapply(
+1:nrow(param_grid),
+mc.cores = 5,
+FUN = function(i){
   params <- param_grid[i,]
-  
   width <- round(sqrt(prey.SIG(params$mass))/15)
   
-  cat("\n--- Running scenario", i, "of", nrow(param_grid), "---\n")
-  cat(sprintf("Mass: %d Calories: %d\n", params$mass, params$calories))
-  
+  message(sprintf("Starting scenario %d: Mass = %d, cal %d", i, params$mass, params$calories))
   
   # Run the simulation with your exact code inside
   res <- tryCatch({
@@ -275,16 +270,18 @@ tic(paste("Scenario", i))
     NULL  # store NULL so indexing is preserved
   })
   
-  all_results[[i]] <- res
+  message(sprintf("Finished scenario %d", i))
+  return(res)
   
-  save(all_results, file = "H:/GitHub/ballistic-movement/sim_results/sensitivity/mass_calorie_results_update.Rda")
-  
-  toc(log = TRUE)
-}
+})
+
+save(all_results, file = "~/H/GitHub/ballistic-movement/sim_results/sensitivity/mass_calorie_results_update.Rda")
 
 all_results_df <- bind_rows(all_results)
 
-save(all_results_df, file = "H:/GitHub/ballistic-movement/sim_results/sensitivity/mass_calorie_results_update_df.Rda)
+save(all_results_df, file = "~/H/GitHub/ballistic-movement/sim_results/sensitivity/mass_calorie_results_update_df.Rda")
+
+
 
 
 
