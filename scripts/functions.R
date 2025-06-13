@@ -93,7 +93,11 @@ prey.tau_p <- function(mass, variance = FALSE) {
   #Back transform
   tau_p <- 10^(tau_p)
   #Add variance if desired
-  if(variance == TRUE){tau_p <- rchisq(n = length(mass), df = tau_p)}
+  if(variance == TRUE){
+    sigma2 <- tau_p * 6
+    tau_p <- rgamma(n = length(mass),
+                    shape = tau_p^2 / sigma2,
+                    scale = sigma2 / tau_p)}
   #Return
   return(tau_p)
 }
@@ -110,7 +114,11 @@ prey.tau_v <- function(mass, variance = FALSE) {
   #Back transform
   tau_v <- 10^(tau_v)
   #Add variance if desired
-  if(variance == TRUE){tau_v <- rchisq(n = length(mass), df = tau_v)}
+  if(variance == TRUE){
+    sigma2 <- tau_v * 6
+    tau_v <- rgamma(n = length(mass),
+                    shape = tau_v^2 / sigma2,
+                    scale = sigma2 / tau_v)}
   #Return
   return(tau_v)
 }
@@ -194,7 +202,7 @@ prey.mass <- function(mass, variance = FALSE) {
 #----------------------------------------------------------------------
 
 createFoodRaster <- function(mass, width, pred = FALSE, 
-                             calories = 5, 
+                             calories = 15, 
                              heterogeneity = FALSE) {
   
   #var[position]
@@ -217,14 +225,13 @@ createFoodRaster <- function(mass, width, pred = FALSE,
   
   #assign biomass values to raster
   if (heterogeneity) {
-    values(food_raster) <- runif(ncell(food_raster), min = 0.1, max = 1.5) * calories * patch_area
+    values(food_raster) <- runif(ncell(food_raster), min = 0.1, max = 5) * calories * patch_area
   } else {
     values(food_raster) <- calories * patch_area
   }
   #return calorie raster
   return(food_raster)
 }
-
 
 #----------------------------------------------------------------------
 # Count the number of patches visited (assumes immediate renewal)----
@@ -312,7 +319,7 @@ sampling <- function(mass) {
 # net calories from grazing----
 #----------------------------------------------------------------------
 
-cals_net <- function(IDs, habitat, mass, models, speed, t){
+prey_cals_net <- function(IDs, habitat, mass, models, speed, t){
   
   interval <- attr(t, "interval")
   time_total <- attr(t, "time_total")
@@ -322,15 +329,15 @@ cals_net <- function(IDs, habitat, mass, models, speed, t){
   cal_gross <- sum(patch_values, na.rm = TRUE)
   
   #metabolic rate (kj/day) from Nagy 1987 https://doi.org/10.2307/1942620
-  BMR <- 0.774 + 0.727 * log10(mass)
-  #back transform
-  BMR <- 10^BMR
-  #convert to cal/s
-  BMR <- (BMR * 239.005736) / 86400
+  # BMR <- 0.774 + 0.727 * log10(mass)
+  # #back transform
+  # BMR <- 10^BMR
+  # #convert to cal/s
+  # BMR <- (BMR * 239.005736) / 86400
   
   #calculate total BMR cost over sample period 
-  BMR_cost <- BMR * time_total
-  
+  # BMR_cost <- BMR * time_total
+  # 
   #calculate movement cost (watts/kg) from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1
   E <- 10.7 * (mass / 1000)^(-0.316) * speed + 6.03 * (mass / 1000)^(-0.303)
   #convert to kJ/s
@@ -343,13 +350,13 @@ cals_net <- function(IDs, habitat, mass, models, speed, t){
   move_cost <- E * time_total
   
   #calculate total energetic costs
-  cost_total <- BMR_cost * 0.2 + move_cost
+  # cost_total <- BMR_cost * 0.2 + move_cost
   
   #assign net calories
-  cal_net <- cal_gross - cost_total
+  cal_net <- cal_gross - move_cost
   
   #return cal_net and cal_max
-  return(list(cal_net = cal_net, costs = cost_total, BMR = BMR_cost, Move = move_cost))
+  return(list(cal_net = cal_net, costs = move_cost))
 }
 
 #----------------------------------------------------------------------
@@ -417,56 +424,86 @@ encounter <- function(prey.tracks, pred.tracks, range = 50){
 }
 
 #----------------------------------------------------------------------
-# Predator fitness function
+# Predator calorie intake
 #----------------------------------------------------------------------
 
-pred.fitness <- function(encounters, mass, costs = NULL, models, time = t, calories = 10, constant = 1){
+pred_cals_net <- function(encounters, mass, t){
   
-  # Extract movement speeds from the models
-  SPEED <- vector()
-  for(i in 1:length(models)){SPEED[i] <- if(nrow(summary(models[[i]], units = FALSE)$CI)==4){summary(models[[i]], units = FALSE)$CI[4,2]} else{Inf}}
+  time_total <- attr(t, "time_total")
   
-  # Basal metabolic rate (in kj/day) from Nagy 1987 https://doi.org/10.2307/1942620 
-  BMR <- 0.774 + 0.727*log10(mass)
+  # metabolic rate (kj/day) from Nagy 1987 https://doi.org/10.2307/1942620
+  # BMR <- 0.774 + 0.727 * log10(mass)
+  # #back transform
+  # BMR <- 10^BMR
+  # #convert to cal/s
+  # BMR <- (BMR * 239.005736) / 86400
   
-  #Back transform 
-  BMR <- 10^BMR
+  #calculate movement cost (watts/kg) from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1
+  E <- 10.7 * (mass / 1000)^(-0.316) * speed + 6.03 * (mass / 1000)^(-0.303)
+  #convert to kJ/s
+  E <- (E * mass/1000)/1000
+  #convert to cal/s
+  E <- E * 239.005736
   
-  # total lifespan in days (based on number of range crossings)
-  #lifespan <- round(pred.tau_p(mass)*crossings) /60/60/24
-  lifespan <- tail(t, n=1) /60/60/24
-  
-  # Metabolic cost of movement in watts/kg from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1 
-  E = 10.7*(mass/1000)^(-0.316)*SPEED + 6.03*(mass/1000)^(-0.303)
-  
-  #Convert to kJ/s
-  E <- (E * (mass/1000))/1000
-  
-  # Maximum running speed in km/hr from Hirt et al. 2017 https://doi.org/10.1038/s41559-017-0241-4
-  v_max <- 25.5 * (mass/1000)^(0.26) * (1 - exp(-22*(mass/1000)^(-0.66)))
-  
-  #Convert to m/s
-  v_max <- v_max/3.6
+  # # Maximum running speed in km/hr from Hirt et al. 2017 https://doi.org/10.1038/s41559-017-0241-4
+  # v_max <- 25.5 * (mass/1000)^(0.26) * (1 - exp(-22*(mass/1000)^(-0.66)))
+  # 
+  # #Convert to m/s
+  # v_max <- v_max/3.6
   
   #Total energetic cost in kj as a function of BMR and movement speed
-  COST <- BMR * lifespan + E*tail(t, n=1)*constant
+  move_cost <- E * time_total
   
-  #Energy intake in kj based on Gorecki 1965 http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.915.5227&rep=rep1&type=pdf
+  #Energy intake in cal based on Gorecki 1965 http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.915.5227&rep=rep1&type=pdf
   mass_prey <- prey.mass(mass)
-  intake <- 1.5 * mass_prey * 4.184 * sum(encounters)
+  intake <- 1500 * mass_prey * sum(encounters)
   
-  # Excess energy
-  excess <- intake - COST
-  excess[is.infinite(excess)] <- NA
+  pred_cal_net <- intake - move_cost
   
-  # Define number of prey offspring based on their excess energy and metabolic rate
-  offspring <- floor(excess/BMR)
-  offspring[is.na(offspring)] <- 0
-  offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #Clamp the minimum to 0
-  
-  return(offspring)
+  return(pred_cal_net)
 }
 
 #----------------------------------------------------------------------
-# 
+# Predator fitness ---- 
 #----------------------------------------------------------------------
+
+#calculate fitness 
+pred.fitness <- function(mass, 
+                         pred_cal_net) 
+{
+  #standardize mass input
+  if (length(mass) == 1) mass <- rep(mass, n_prey)
+  
+  #update weight
+  pred_cal_net[cal_net < 0] <- 0 #prevent negative
+  growth_cal <- pred_cal_net*0.8 #allocation to soma
+  repro_cal <- pred_cal_net*0.2 #allocation to reproduction
+  
+  weight.gain <- growth_cal / 5000
+  mass.update <- mass + weight.gain
+  
+  #using mass allocated to reproduction to determine W_R
+  W_R <- repro_cal / 5000
+  
+  #birth weight via allometric scaling in mammals from Blueweiss et al. 1978 https://doi.org/10.1007/BF00344996
+  #wet weight $\approx$ 0.75 total weight
+  ##therefore dry mass $\approx$ 0.25 from Fusch et al. 1999 https://doi.org/10.1203/00006450-199910000-00018
+  W_B0 <- 0.25*(0.097*mass.update^(0.92))
+  
+  #total offspring based on updated mass
+  offspring <- floor(W_R/W_B0) 
+  
+  #set offspring to 0 is cal_net <= 0
+  offspring[cal_net <= 0] <- 0
+  
+  #If predator encounters are being considered,
+  #individuals that encountered a predator are killed and don't reproduce.
+  if(!is.null(costs)){
+    offspring[costs] <- 0
+  }
+  
+  #clamp minimum offspring to 0
+  offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #clamp the minimum to 0
+  
+  return(list(offspring = offspring, mass_update = mass.update))
+}
