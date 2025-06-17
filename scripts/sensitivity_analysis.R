@@ -13,10 +13,12 @@ library(dplyr)
 library(gridExtra)
 library(patchwork)
 library(tictoc)
+library(parallel)
 
 #source the functions (ensure 'functions.R' is available in the working directory)
 source("scripts/functions.R")
 
+Ncores <- 10
 #--------------------------------------------------------------------------
 # create function for simulation ------------------------------------------
 #--------------------------------------------------------------------------
@@ -25,8 +27,9 @@ run_sens <- function(mass_prey,
                      GENS,
                      REPS,
                      n_prey,
-                     calories, 
-                     width) {
+                     width,
+                     calories,
+                     fctr) {
   
   # Create or load FOOD raster based on parameters
   FOOD <- createFoodRaster(mass_prey, 
@@ -44,11 +47,16 @@ run_sens <- function(mass_prey,
   PREY_sig <- numeric(0)
   
   for(G in 1:GENS) {
+    tic(paste("Generation", G))
     
     prey <- list()
+    # pred <- list()
+    
     
     for(R in 1:REPS){
       
+      # generate movement models
+      # if the first generation, generate movement parameters from mass
       if (G == 1) {
         CENTRES <- rbvpois(n = n_prey,
                            a = prey.SIG(mass_prey)*0.75,
@@ -67,9 +75,23 @@ run_sens <- function(mass_prey,
           PREY_mods[[i]] <- ctmm(tau = c(prey_tau_p, prey_tau_v),
                                  mu = c(CENTRES[i,1], CENTRES[i,2]),
                                  sigma = prey_sig)
-        }
-      }
+        } # closes loop over n_prey
+        
+        # PRED_mods <- list()
+        # for(i in 1:n_pred){
+        #   pred_tau_p <- pred.tau_p(mass_pred, variance = TRUE)
+        #   pred_tau_v <- pred.tau_v(mass_pred, variance = TRUE)
+        #   pred_sig <- pred.SIG(mass_pred)
+        #   pred_lv <- sqrt((pred_tau_v / pred_tau_p) * pred_sig)
+        #   
+        #   PRED_mods[[i]] <- ctmm(tau = c(pred_tau_p,
+        #                                  pred_tau_v),
+        #                          mu = c(0,0),
+        #                          sigma = pred_sig)
+        # } # closes loop over n_pred
+      } # closes generation 1
       
+      # if any other generation, draw movement parameters from the offspring pool
       if (G!=1){
         CENTRES <- rbvpois(n = n_prey,
                            a = prey.SIG(mass_prey)*0.75,
@@ -89,13 +111,43 @@ run_sens <- function(mass_prey,
           PREY_mods[[i]] <- ctmm(tau = c(prey_tau_p, prey_tau_v),
                                  mu = c(CENTRES[i,1], CENTRES[i,2]),
                                  sigma = prey_sig)
-        }
-      }
-      #simulate prey movement
-      PREY_tracks <- list()
-      for(i in 1:n_prey){
-        PREY_tracks[[i]] <- simulate(PREY_mods[[i]], t = t)
-      }
+        } # closes loop over n_prey
+        
+        # PRED_mods <- list()
+        # for(i in 1:n_pred){
+        #   pred_tau_p <- sample(PRED_tau_p,1) + rnorm(1, 0, 10) # add some 'mutation' based variance
+        #   pred_tau_p <- ctmm:::clamp(pred_tau_p, min = 0.1, max = Inf) # clamp the minimum to 0
+        #   pred_tau_v <- sample(PRED_tau_v,1) + rnorm(1, 0, 2) # add some 'mutation' based variance
+        #   pred_tau_v <- ctmm:::clamp(pred_tau_v, min = 0.1, max = Inf) # clamp the minimum to 0
+        #   pred_sig <- sample(PRED_sig,1)
+        #   pred_lv <- sqrt((pred_tau_v/pred_tau_p)*pred_sig)
+        #   
+        #   PREY_mods[[i]] <- ctmm(tau = c(pred_tau_p, 
+        #                                  pred_tau_v),
+        #                          mu = c(0,0),
+        #                          sigma = pred_sig)
+        # } # closes loop over n_pred
+      } # close if not generation 1
+      
+      # simulate prey movement
+      
+      # PREY_tracks <- list()
+      # for(i in 1:n_prey){
+      #   PREY_tracks[[i]] <- simulate(PREY_mods[[i]], t = t)
+      # }
+      
+      # parallelised to speed up run times
+      PREY_tracks <- mclapply(PREY_mods,
+                              FUN = simulate,
+                              t = t,
+                              mc.cores = Ncores)
+      
+      # simualte predator movement
+      
+      # PRED_tracks <- list()
+      # for(i in 1:n_pred){
+      #   PRED_tracks[[i]] <- simualte(PRED_mods[[i]], t = t)
+      # }
       
       #extract ids of patches entered
       benefits_prey <- vector("list", n_prey)
@@ -109,50 +161,69 @@ run_sens <- function(mass_prey,
         patches[[i]] <- attr(benefits_prey[[i]], "patches")
       }
       
-      #extract speed from model
-      speed <- numeric(n_prey)
+      #extract prey speed from model
+      prey_speed <- numeric(n_prey)
       for(i in 1:n_prey){
-        speed[[i]] <- speed_val(models = PREY_mods[[i]])
+        prey_speed[[i]] <- speed_val(models = PREY_mods[[i]])
       }
       
+      #extract predator speed from model
+      # pred_speed <- numeric(n_pred)
+      # for(i in 1:n_prey){
+      #   pred_speed[[i]] <- speed_val(models = PRED_mods[[i]])
+      # }
+      
       #assign net calories to each individual
-      cal_list <- vector("list", n_prey)
-      cal_net <- numeric(n_prey)
-      costs <- numeric(n_prey)
-      BMR <- numeric(n_prey)
-      Move <- numeric(n_prey)
+      prey_cal_list <- vector("list", n_prey)
+      prey_cal_net <- numeric(n_prey)
+      prey_costs <- numeric(n_prey)
       for(i in 1:n_prey){
         mass <- if(length(mass_prey) == 1) mass_prey else mass_prey[i]
         
-        cal_list[[i]] <- cals_net(IDs = benefits_prey[[i]], 
-                                  habitat = FOOD, 
-                                  mass = mass, 
-                                  models = PREY_mods[[i]],
-                                  speed = speed[[i]],
-                                  t = t)
-        # Defensive: check result is valid
-        if (is.list(cal_list[[i]]) &&
-            all(c("cal_net") %in% names(cal_list[[i]]))) {
-          
-          cal_net[i] <- cal_list[[i]]$cal_net
-          costs[i] <- cal_list[[i]]$costs
-          BMR[i] <- cal_list[[i]]$BMR
-          Move[i] <- cal_list[[i]]$Move
-          
-        } else {
-          cal_net[i] <- NA
-          warning(sprintf("Invalid result from cals_net for individual %d", i))
-        }
+        prey_cal_list[[i]] <- prey_cals_net(IDs = benefits_prey[[i]], 
+                                            mass = mass, 
+                                            speed = prey_speed[[i]],
+                                            t = t)
+        
+        prey_cal_net[i] <- prey_cal_list[[i]]$cal_net
+        prey_costs[i] <- prey_cal_list[[i]]$costs
       }
       
-      #compute prey offspring
-      results <- prey.fitness(mass = mass_prey,
-                              cal_net = cal_net)
+      # count the encounters (only setup for a single predator/arena)
+      # encounters <- encounter(prey.tracks = PREY_tracks,
+      #                         pred.tracks = PRED_tracks,
+      #                         range = sqrt(pred.SIG(mass_pred))*0.05) # perceptual range scaled to HR size
       
-      offspring_prey <- results$offspring
-      mass_update_prey <- results$mass_update
+      # assign net calories to each predator 
+      # pred_cal_list <- vector("list", n_prey)
+      # pred_cal_net <- numeric(n_prey)
+      # pred_costs <- numeric(n_prey)
+      # for(i in 1:n_prey){
+      #   mass <- if(length(mass_prey) == 1) mass_pred else mass_pred[i]
+      #   
+      #   pred_cal_list[[i]] <- pred_cals_net(encounters = encounters,
+      #                                  mass = mass_pred,
+      #                                  t = t)
+      #   
+      #   pred_cal_net[i] <- pred_cal_list[[i]]$pred_cal_net
+      #   pred_costs[i] <- pred_cal_list[[i]]$pred_costs
+      # } 
       
-      #get values
+      # compute prey offspring
+      prey_results <- prey.fitness(mass = mass_prey,
+                                   cal_net = prey_cal_net)
+      
+      offspring_prey <- prey_results$offspring
+      mass_update_prey <- prey_results$mass_update
+      
+      # compute predator offspring
+      # pred_results <- pred.fitness(mass = mass_pred,
+      #                              pred_cal_net = pred_cal_net)
+      # 
+      # offspring_pred <- pred_results$offspring
+      # mass_update_pred <- pred_results$mass_update
+      
+      # get prey values
       prey_lvs <- vector()
       prey_TAU_V <- vector()
       prey_TAU_P <- vector()
@@ -171,25 +242,59 @@ run_sens <- function(mass_prey,
                               sig = prey_SIGMA,
                               lv = prey_lvs,
                               patches = unlist(patches),
-                              cal_net = cal_net,
-                              costs = costs,
-                              speed = unlist(speed),
+                              cal_net = prey_cal_net,
+                              costs = prey_costs,
+                              speed = unlist(prey_speed),
                               offspring = unlist(offspring_prey),
                               mass = mass_prey,
                               mass_update = unlist(mass_update_prey),
-                              patch_width = width,
-                              calories = calories,
-                              BMR = BMR,
-                              Move = Move)
-    }
+                              fctr = fctr,
+                              width = width,
+                              calories = calories)
+      
+      # get predator values
+      # pred_lvs <- vector()
+      # pred_TAU_V <- vector()
+      # pred_TAU_P <- vector()
+      # pred_SIGMA <- vector()
+      # for(i in 1:n_pred){
+      #   pred_TAU_V[i] <- PRED_mods[[i]]$tau["velocity"]
+      #   pred_TAU_P[i] <- PRED_mods[[i]]$tau["position"]
+      #   pred_SIGMA[i] <- ctmm:::area.covm(PRED_mods[[i]]$sigma)
+      #   pred_lvs[i] <- sqrt((pred_TAU_V[i]/pred_TAU_P[i])*pred_SIGMA[i])
+      # }
+      
+      # pred[[R]] <- data.frame(generation = G,
+      #                         tau_p = pred_TAU_P,
+      #                         tau_v = pred_TAU_V,
+      #                         sig = pred_SIGMA,
+      #                         lv = pred_lvs,
+      #                         pred_cal_net = pred_cal_net,
+      #                         pred_costs = pred_costs,
+      #                         speed = unlist(pred_speed),
+      #                         offspring = unlist(offspring_pred),
+      #                         mass = mass_pred,
+      #                         mass_update = unlist(mass_update_pred))
+      
+    } # closes loop over number of arenas
     
     prey <- do.call(rbind, prey)
+    # pred <- do.call(rbind, pred)
     
+    # save the results
+    # prey
     prey_res[[G]] <- data.frame(generation = G, 
                                 lv = mean(prey$lv),
                                 var = var(prey$lv))
     
     prey_details[[G]] <- prey
+    
+    # predator
+    # pred_res[[G]] <- data.frame(generation = G,
+    #                             lv = mean(pred$lv),
+    #                             var = var(pred$lv))
+    # 
+    # pred_details[[G]] <- pred
     
     #Set up the parameters for the next generation based on
     #Fitness of current generation
@@ -208,16 +313,46 @@ run_sens <- function(mass_prey,
                       rep(prey[i,"sig"], prey[i,"offspring"]))
         
       } #Closes the if statement
-    }
+    } #closes loop over the number of prey
+    
+    
+    #Fitness of current generation
+    # PRED_tau_p <- vector()
+    # PRED_tau_v <- vector()
+    # PRED_sig <- vector()
+    # for(i in 1:nrow(pred)){
+    #   if(pred[i,"offspring"] >0){
+    #     PRED_tau_p <- c(PRED_tau_p,
+    #                     rep(pred[i,"tau_p"], pred[i,"offspring"]))
+    #     
+    #     PRED_tau_v <- c(PRED_tau_v,
+    #                     rep(pred[i,"tau_v"], pred[i,"offspring"]))
+    #     
+    #     PRED_sig <- c(PRED_sig,
+    #                   rep(pred[i,"sig"], pred[i,"offspring"]))
+    #     
+    #   } # closes the if statement
+    # } #closes loop over the number of pred
+    
     # If no offspring, save results and stop simulation
     if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
       warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
-
+      
+      save(prey_res, file = 'sim_results/constant_resources_nopred/June16_5000000g_10variance_prey_res.Rda')
+      save(prey_details, file = 'sim_results/constant_resources_nopred/June16_5000000g_10varaiance_prey_details.Rda')  
+      
       break
     }
     
-    #progress report
-    print(G)
+    #save results
+    save(prey_res, file = 'sim_results/constant_resources_nopred/June16_5000000g_10variance_prey_res.Rda')
+    save(prey_details, file = 'sim_results/constant_resources_nopred/June16_5000000g_10varaiance_prey_details.Rda')  
+    
+    # save predator results
+    # save(pred_res, file = '')
+    # save(pred_details, file = '')
+    
+    toc(log = TRUE)
   }
   
   return(prey_details)
@@ -229,66 +364,81 @@ run_sens <- function(mass_prey,
 #--------------------------------------------------------------------------
 
 #number of individuals in arena
-n_prey <- 5
+n_prey <- 10
 
 #number of arenas
 REPS <- 5
 
 #number of generations
-GENS <- 5
+GENS <- 2
 
-masses <- seq(1000, 100000, 1000)
-calories <- seq(3, 99, 3)
+mass_prey <- 30000
 
-# Define your parameter combinations here
-param_grid <- expand.grid(
-  mass = masses,
-  calories = calories
-)
+calories <- 15
 
-all_results <- parallel::mclapply(
-1:nrow(param_grid),
-mc.cores = 5,
-FUN = function(i){
-  params <- param_grid[i,]
-  width <- round(sqrt(prey.SIG(params$mass))/15)
+fctr <- seq(5, 30, 0.5)
+param_grid <- data.frame(fctr = fctr)
+
+all_results <- list()
+
+for(i in 1:nrow(param_grid)){
+  tic(paste("Scenario", i))
   
-  message(sprintf("Starting scenario %d: Mass = %d, cal %d", i, params$mass, params$calories))
+  fctr <- param_grid$fctr[i]
+  
+  width <- round(sqrt(prey.SIG(mass_prey))/fctr)
+  
+  cat("\n--- Running Scenario", i, "of", nrow(param_grid), "---\n")
+  cat(sprintf("Factor: %f\n", fctr))
   
   # Run the simulation with your exact code inside
   res <- tryCatch({
     run_sens(
-      mass_prey = params$mass,
-      calories = params$calories,
+      mass_prey = mass_prey,
       GENS = GENS,
       REPS = REPS,
       n_prey = n_prey,
-      width = width
+      width = width,
+      calories = calories,
+      fctr = fctr
     )
   }, error = function(e) {
     warning(sprintf("Scenario %d failed: %s", i, e$message))
     NULL  # store NULL so indexing is preserved
   })
   
-  message(sprintf("Finished scenario %d", i))
-  return(res)
+  all_results[[i]] <- res
   
-})
+}
 
-save(all_results, file = "~/H/GitHub/ballistic-movement/sim_results/sensitivity/mass_calorie_results_update.Rda")
+save(all_results, file = "~/H/GitHub/ballistic-movement/sim_results/sensitivity/patch_width_sensitivity3.Rda")
 
 all_results_df <- bind_rows(all_results)
 
-save(all_results_df, file = "~/H/GitHub/ballistic-movement/sim_results/sensitivity/mass_calorie_results_update_df.Rda")
+save(all_results_df, file = "~/H/GitHub/ballistic-movement/sim_results/sensitivity/patch_width_sensitivity_df3.Rda")
 
+# patch_width ~ lv analysis
 
+last_10_df <- all_results_df %>%
+  group_by(width) %>%
+  filter(generation >= max(generation) - 9) 
 
+valid_widths <- last_10_df %>%
+  group_by(width) %>%
+  summarise(total_offspring = sum(offspring, na.rm = TRUE)) %>%
+  filter(total_offspring > 0) %>%
+  pull(width)
 
+summary_res <- last_10_df %>%
+  filter(width %in% valid_widths) %>%
+  group_by(width) %>%
+  summarise(mean_lv = mean(lv, na.rm = TRUE))
 
-
-
-
-
+ggplot(summary_res, aes(y = mean_lv, x = width)) +
+  geom_point() +
+  labs(y = "mean_lv", x = "patch width", title = 'mean l_v from last 10 generations versus patch width, 30 calories per unit^2') +
+  theme_minimal()
+ggsave("~/H/GitHub/ballistic-movement/figures/patch_width_optimal_lv2.PNG", bg = "white")
 
 
 

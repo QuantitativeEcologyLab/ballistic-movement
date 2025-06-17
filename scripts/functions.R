@@ -94,7 +94,7 @@ prey.tau_p <- function(mass, variance = FALSE) {
   tau_p <- 10^(tau_p)
   #Add variance if desired
   if(variance == TRUE){
-    sigma2 <- tau_p * 6
+    sigma2 <- tau_p * 10
     tau_p <- rgamma(n = length(mass),
                     shape = tau_p^2 / sigma2,
                     scale = sigma2 / tau_p)}
@@ -115,7 +115,7 @@ prey.tau_v <- function(mass, variance = FALSE) {
   tau_v <- 10^(tau_v)
   #Add variance if desired
   if(variance == TRUE){
-    sigma2 <- tau_v * 6
+    sigma2 <- tau_v * 10
     tau_v <- rgamma(n = length(mass),
                     shape = tau_v^2 / sigma2,
                     scale = sigma2 / tau_v)}
@@ -319,7 +319,7 @@ sampling <- function(mass) {
 # net calories from grazing----
 #----------------------------------------------------------------------
 
-prey_cals_net <- function(IDs, habitat, mass, models, speed, t){
+prey_cals_net <- function(IDs, mass, speed, t){
   
   interval <- attr(t, "interval")
   time_total <- attr(t, "time_total")
@@ -357,6 +357,21 @@ prey_cals_net <- function(IDs, habitat, mass, models, speed, t){
   
   #return cal_net and cal_max
   return(list(cal_net = cal_net, costs = move_cost))
+}
+
+#..............................................................................
+
+prey_cals_net_nocost <- function(IDs){
+  
+  #extract calorie values from which the movement track overlaps
+  patch_values <- attr(IDs, "patch_values")
+  cal_gross <- sum(patch_values, na.rm = TRUE)
+  
+  #assign net calories
+  cal_net <- cal_gross
+  
+  #return cal_net and cal_max
+  return(cal_net)
 }
 
 #----------------------------------------------------------------------

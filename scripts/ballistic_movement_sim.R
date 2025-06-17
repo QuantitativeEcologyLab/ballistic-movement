@@ -19,7 +19,7 @@ library(tictoc)
 # Source the functions (ensure 'functions.R' is available in the working directory)
 source("scripts/functions.R")
 
-Ncores <- 5
+Ncores <- 10
 
 #----------------------------------------------------------------------
 # run the simulation----
@@ -32,18 +32,16 @@ mass_prey <- 30000
 t <- sampling(mass_prey)
 
 #number of individuals in arena
-n_prey <- 10
+n_prey <- 30
 
 #number of arenas
 REPS <- 5
 
 #number of generations
-GENS <- 1000
+GENS <- 2000
 
 #build food raster
-FOOD <- createFoodRaster(mass_prey, calories = 15, width = round(sqrt(prey.SIG(mass_prey)))/10, heterogeneity = TRUE)
-plot(FOOD)
-
+FOOD <- createFoodRaster(mass_prey, calories = 15, width = round(sqrt(prey.SIG(mass_prey)))/10, heterogeneity = FALSE)
 #lists for storing results
 prey_res <- list()
 prey_details <- list()
@@ -148,14 +146,18 @@ for(G in 1:GENS) {
     
     # PRED_tracks <- list()
     # for(i in 1:n_pred){
-    #   PRED_tracks[[i]] <- simualte(PRED_mods[[i]], t = t)
+    #   PRED_tracks[[i]] <- simulate(PRED_mods[[i]], t = t)
     # }
     
     #extract ids of patches entered
-    benefits_prey <- vector("list", n_prey)
-    for(i in 1:n_prey){
-      benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD)
-    }
+    # benefits_prey <- vector("list", n_prey)
+    # for(i in 1:n_prey){
+    #   benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD)
+    # }
+    
+    benefits_prey <- mclapply(PREY_tracks, 
+                              function(track) grazing(track, FOOD), 
+                              mc.cores = Ncores)
     
     #extract number of changes between patches
     patches <- vector("list", n_prey)
@@ -176,21 +178,25 @@ for(G in 1:GENS) {
     # }
     
     #assign net calories to each individual
-    prey_cal_list <- vector("list", n_prey)
+    # prey_cal_list <- vector("list", n_prey)
+    # prey_cal_net <- numeric(n_prey)
+    # # prey_costs <- numeric(n_prey)
+    # for(i in 1:n_prey){
+    #   mass <- if(length(mass_prey) == 1) mass_prey else mass_prey[i]
+    #   
+    #   prey_cal_list[[i]] <- prey_cals_net_nocost(IDs = benefits_prey[[i]], 
+    #                             habitat = FOOD,
+    #                             mass = mass, 
+    #                             speed = prey_speed[[i]],
+    #                             t = t)
+    #   
+    #     prey_cal_net[i] <- prey_cal_list[[i]]$cal_net
+        # prey_costs[i] <- prey_cal_list[[i]]$costs
+    # }
+    
     prey_cal_net <- numeric(n_prey)
-    prey_costs <- numeric(n_prey)
     for(i in 1:n_prey){
-      mass <- if(length(mass_prey) == 1) mass_prey else mass_prey[i]
-      
-      prey_cal_list[[i]] <- prey_cals_net(IDs = benefits_prey[[i]], 
-                                habitat = FOOD, 
-                                mass = mass, 
-                                models = PREY_mods[[i]],
-                                speed = speed[[i]],
-                                t = t)
-      
-        prey_cal_net[i] <- cal_list[[i]]$cal_net
-        prey_costs[i] <- cal_list[[i]]$costs
+      prey_cal_net[[i]] <- prey_cals_net_nocost(IDs = benefits_prey[[i]])
     }
     
     # count the encounters (only setup for a single predator/arena)
@@ -215,7 +221,7 @@ for(G in 1:GENS) {
     
     # compute prey offspring
     prey_results <- prey.fitness(mass = mass_prey,
-                                 cal_net = cal_net)
+                                 cal_net = prey_cal_net)
     
     offspring_prey <- prey_results$offspring
     mass_update_prey <- prey_results$mass_update
@@ -247,7 +253,7 @@ for(G in 1:GENS) {
                             lv = prey_lvs,
                             patches = unlist(patches),
                             cal_net = prey_cal_net,
-                            costs = prey_costs,
+                            # costs = prey_costs,
                             speed = unlist(prey_speed),
                             offspring = unlist(offspring_prey),
                             mass = mass_prey,
@@ -339,15 +345,15 @@ for(G in 1:GENS) {
     if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
     warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
     
-    save(prey_res, file = 'sim_results/var_resources_nopred/June13_30000g_high_heterogeneous_prey_res.Rda')
-    save(prey_details, file = 'sim_results/var_resources_nopred/June13_30000g_high_heterogeneous_prey_details.Rda')  
+    save(prey_res, file = 'sim_results/supporting_analysis/June16_30000g_nocosts2_prey_res.Rda')
+    save(prey_details, file = 'sim_results/supporting_analysis/June16_30000g_nocosts2_prey_details.Rda')  
     
     break
     }
   
   #save results
-  save(prey_res, file = 'sim_results/var_resources_nopred/June13_30000g_high_heterogeneous_prey_res.Rda')
-  save(prey_details, file = 'sim_results/var_resources_nopred/June13_30000g_high_heterogeneous_prey_details.Rda') 
+  save(prey_res, file = 'sim_results/supporting_analysis/June16_30000g_nocosts2_prey_res.Rda')
+  save(prey_details, file = 'sim_results/supporting_analysis/June16_30000g_nocosts2_prey_details.Rda')    
   
   # save predator results
   # save(pred_res, file = '')
@@ -363,9 +369,6 @@ for(G in 1:GENS) {
 #----------------------------------------------------------------------
 # make diagnostic figures----
 #----------------------------------------------------------------------
-
-load('~/H/GitHub/ballistic-movement/sim_results/var_resources_nopred/June12_30000g_heterogeneous_prey_res.Rda')
-load('~/H/GitHub/ballistic-movement/sim_results/var_resources_nopred/June12_30000g_heterogeneous_prey_details.Rda')
 
 # make data sets compatible
 prey_res_df <- do.call(rbind, prey_res)
@@ -582,7 +585,7 @@ plots <- list(rel.lv.gen,
               sig.gen,
               lv.gen,
               patches.gen,
-              cost.gen,
+              # cost.gen,
               offspring.gen,
               cal.gen,
               mass.gen,
@@ -592,30 +595,28 @@ plots <- list(rel.lv.gen,
               patches.speed,
               cal.lv,
               offspring.lv,
-              cost.speed,
+              # cost.speed,
               offspring.speed,
               cal.mass,
               speed.mass,
               speed.cal,
-              cost.mass,
+              # cost.mass,
               offspring.mass,
               offspring.cal,
               patches.off,
               taup.speed)
 
-final.plot <- wrap_plots(plots[1:11], ncol = 4)
-final <- final.plot + plot_annotation('Panel 1: 30000g, 0.1-1.5*15 calories, 1000 generations')
+final.plot <- wrap_plots(plots[1:10], ncol = 4)
+final <- final.plot + plot_annotation('Panel 1: 30000g, no costs, 1000 generations')
 print(final)
-ggsave("~/H/GitHub/ballistic-movement/figures/varying_mass/heterogenous/30000g_0.1to1.5_15basecal_panel1.PNG", plot = final, width = 15, height = 8, dpi = 800)
+ggsave("~/H/GitHub/ballistic-movement/figures/no_costs/30000g_panel1.PNG", plot = final, width = 15, height = 8, dpi = 800)
 
 
-final.plot2 <- wrap_plots(plots[12:26], ncol = 4)
-final2 <- final.plot2 + plot_annotation('Panel 2: 30000g, 0.1-5*15 calories, 1000 generations')
+final.plot2 <- wrap_plots(plots[11:23], ncol = 4)
+final2 <- final.plot2 + plot_annotation('Panel 2: 30000g, no costs, 1000 generations')
 print(final2)
-ggsave("~/H/GitHub/ballistic-movement/figures/varying_mass/heterogenous/30000g_0.1to515basecal_panel2.PNG", plot = final2, width = 15, height = 8, dpi = 800)
+ggsave("~/H/GitHub/ballistic-movement/figures/no_costs/30000g_panel2.PNG", plot = final2, width = 15, height = 8, dpi = 800)
  
-
-
 
 
 
