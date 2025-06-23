@@ -143,7 +143,7 @@ absmax <- max(abs(vmin), abs(vmax))
 a <-
   ggplot() +
   ggtitle("A") +
-  geom_point(data = prey_details_df, aes(x = speed, y = cal_net), size = 0.1) +
+  geom_point(data = prey_details_df_nocosts, aes(x = speed, y = cal_net), size = 0.1) +
   labs(x = "speed (m/s)", y = "net calories") +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
@@ -160,7 +160,7 @@ a <-
 print(a)
 
 b <-
-  ggplot(data = prey_details_df, aes(x = lv, y = cal_net)) +
+  ggplot(data = prey_details_df_nocosts, aes(x = lv, y = cal_net)) +
   ggtitle("B") +
   geom_point(size = 0.1) +
   xlab(expression(bold(l[v])))+
@@ -203,7 +203,7 @@ c <-
         legend.key = element_rect(fill = "transparent", color = NA),
         panel.background = element_rect(fill = "transparent"),
         plot.background = element_rect(fill = "transparent", color = NA),
-        plot.margin = unit(c(0.2,0.1,0.2,0.2), "cm"))
+        plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm"))
 print(c)
 
 e <-
@@ -269,7 +269,7 @@ ggplot() +
         legend.key = element_rect(fill = "transparent", color = NA),
         panel.background = element_rect(fill = "transparent"),
         plot.background = element_rect(fill = "transparent", color = NA),
-        plot.margin = unit(c(0.2,0.1,0.2,0.2), "cm"))
+        plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm"))
 print(g)
 
 # final plot -------------------------------------------------------------------
