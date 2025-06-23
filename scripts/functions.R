@@ -345,6 +345,8 @@ prey_cals_net <- function(IDs, mass, speed, t){
   #convert to cal/s
   E <- E * 239.005736
   
+  E <- E * 1.5
+  
   #calculate total movement costs
   #cal/s to cal 
   move_cost <- E * time_total

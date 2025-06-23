@@ -146,14 +146,18 @@ run_sens <- function(mass_prey,
       
       # PRED_tracks <- list()
       # for(i in 1:n_pred){
-      #   PRED_tracks[[i]] <- simualte(PRED_mods[[i]], t = t)
+      #   PRED_tracks[[i]] <- simulate(PRED_mods[[i]], t = t)
       # }
       
       #extract ids of patches entered
-      benefits_prey <- vector("list", n_prey)
-      for(i in 1:n_prey){
-        benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD)
-      }
+      # benefits_prey <- vector("list", n_prey)
+      # for(i in 1:n_prey){
+      #   benefits_prey[[i]] <- grazing(PREY_tracks[[i]], FOOD)
+      # }
+      
+      benefits_prey <- mclapply(PREY_tracks, 
+                                function(track) grazing(track, FOOD), 
+                                mc.cores = Ncores)
       
       #extract number of changes between patches
       patches <- vector("list", n_prey)
@@ -180,14 +184,19 @@ run_sens <- function(mass_prey,
       for(i in 1:n_prey){
         mass <- if(length(mass_prey) == 1) mass_prey else mass_prey[i]
         
-        prey_cal_list[[i]] <- prey_cals_net(IDs = benefits_prey[[i]], 
-                                            mass = mass, 
+        prey_cal_list[[i]] <- prey_cals_net(IDs = benefits_prey[[i]],
+                                            mass = mass,
                                             speed = prey_speed[[i]],
                                             t = t)
         
         prey_cal_net[i] <- prey_cal_list[[i]]$cal_net
         prey_costs[i] <- prey_cal_list[[i]]$costs
       }
+      
+      # prey_cal_net <- numeric(n_prey)
+      # for(i in 1:n_prey){
+      #   prey_cal_net[[i]] <- prey_cals_net_nocost(IDs = benefits_prey[[i]])
+      # }
       
       # count the encounters (only setup for a single predator/arena)
       # encounters <- encounter(prey.tracks = PREY_tracks,
@@ -243,14 +252,13 @@ run_sens <- function(mass_prey,
                               lv = prey_lvs,
                               patches = unlist(patches),
                               cal_net = prey_cal_net,
-                              costs = prey_costs,
+                              # costs = prey_costs,
                               speed = unlist(prey_speed),
                               offspring = unlist(offspring_prey),
                               mass = mass_prey,
                               mass_update = unlist(mass_update_prey),
-                              fctr = fctr,
-                              width = width,
-                              calories = calories)
+                              width = width, 
+                              fctr = fctr)
       
       # get predator values
       # pred_lvs <- vector()
@@ -315,7 +323,6 @@ run_sens <- function(mass_prey,
       } #Closes the if statement
     } #closes loop over the number of prey
     
-    
     #Fitness of current generation
     # PRED_tau_p <- vector()
     # PRED_tau_v <- vector()
@@ -338,19 +345,8 @@ run_sens <- function(mass_prey,
     if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
       warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
       
-      save(prey_res, file = 'sim_results/constant_resources_nopred/June16_5000000g_10variance_prey_res.Rda')
-      save(prey_details, file = 'sim_results/constant_resources_nopred/June16_5000000g_10varaiance_prey_details.Rda')  
-      
       break
     }
-    
-    #save results
-    save(prey_res, file = 'sim_results/constant_resources_nopred/June16_5000000g_10variance_prey_res.Rda')
-    save(prey_details, file = 'sim_results/constant_resources_nopred/June16_5000000g_10varaiance_prey_details.Rda')  
-    
-    # save predator results
-    # save(pred_res, file = '')
-    # save(pred_details, file = '')
     
     toc(log = TRUE)
   }
@@ -370,26 +366,28 @@ n_prey <- 10
 REPS <- 5
 
 #number of generations
-GENS <- 2
-
-mass_prey <- 30000
+GENS <- 500
 
 calories <- 15
 
-fctr <- seq(5, 30, 0.5)
-param_grid <- data.frame(fctr = fctr)
+masses <- round(10^seq(log10(100000), log10(5e6), length.out = 5))
+
+param_grid <- expand.grid(
+  mass = masses,
+  fctr = seq(5, 20, 1))
 
 all_results <- list()
 
 for(i in 1:nrow(param_grid)){
-  tic(paste("Scenario", i))
+  
+  mass_prey <- param_grid$mass[i]
   
   fctr <- param_grid$fctr[i]
   
   width <- round(sqrt(prey.SIG(mass_prey))/fctr)
   
   cat("\n--- Running Scenario", i, "of", nrow(param_grid), "---\n")
-  cat(sprintf("Factor: %f\n", fctr))
+  cat(sprintf("Mass: %d, Factor: %d\n", mass_prey, fctr))
   
   # Run the simulation with your exact code inside
   res <- tryCatch({
@@ -408,14 +406,14 @@ for(i in 1:nrow(param_grid)){
   })
   
   all_results[[i]] <- res
+
+  save(all_results, file = "~/H/GitHub/ballistic-movement/sim_results/sensitivity/largemasses_fctr5to20_cal15.Rda")
   
 }
 
-save(all_results, file = "~/H/GitHub/ballistic-movement/sim_results/sensitivity/patch_width_sensitivity3.Rda")
-
 all_results_df <- bind_rows(all_results)
 
-save(all_results_df, file = "~/H/GitHub/ballistic-movement/sim_results/sensitivity/patch_width_sensitivity_df3.Rda")
+save(all_results_df, file = "~/H/GitHub/ballistic-movement/sim_results/sensitivity/largemasses_fctr5to20_cal15.Rda")
 
 # patch_width ~ lv analysis
 
@@ -439,7 +437,4 @@ ggplot(summary_res, aes(y = mean_lv, x = width)) +
   labs(y = "mean_lv", x = "patch width", title = 'mean l_v from last 10 generations versus patch width, 30 calories per unit^2') +
   theme_minimal()
 ggsave("~/H/GitHub/ballistic-movement/figures/patch_width_optimal_lv2.PNG", bg = "white")
-
-
-
 

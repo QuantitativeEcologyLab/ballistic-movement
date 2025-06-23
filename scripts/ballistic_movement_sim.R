@@ -26,22 +26,23 @@ Ncores <- 10
 #----------------------------------------------------------------------
 
 # Prey mass (g)
-mass_prey <- 30000
+mass_prey <- 5000000
 
 #set sampling interval and lifespan
 t <- sampling(mass_prey)
 
 #number of individuals in arena
-n_prey <- 30
+n_prey <- 10
 
 #number of arenas
 REPS <- 5
 
 #number of generations
-GENS <- 2000
+GENS <- 200
 
 #build food raster
 FOOD <- createFoodRaster(mass_prey, calories = 15, width = round(sqrt(prey.SIG(mass_prey)))/10, heterogeneity = FALSE)
+
 #lists for storing results
 prey_res <- list()
 prey_details <- list()
@@ -178,25 +179,19 @@ for(G in 1:GENS) {
     # }
     
     #assign net calories to each individual
-    # prey_cal_list <- vector("list", n_prey)
-    # prey_cal_net <- numeric(n_prey)
-    # # prey_costs <- numeric(n_prey)
-    # for(i in 1:n_prey){
-    #   mass <- if(length(mass_prey) == 1) mass_prey else mass_prey[i]
-    #   
-    #   prey_cal_list[[i]] <- prey_cals_net_nocost(IDs = benefits_prey[[i]], 
-    #                             habitat = FOOD,
-    #                             mass = mass, 
-    #                             speed = prey_speed[[i]],
-    #                             t = t)
-    #   
-    #     prey_cal_net[i] <- prey_cal_list[[i]]$cal_net
-        # prey_costs[i] <- prey_cal_list[[i]]$costs
-    # }
-    
+    prey_cal_list <- vector("list", n_prey)
     prey_cal_net <- numeric(n_prey)
+    prey_costs <- numeric(n_prey)
     for(i in 1:n_prey){
-      prey_cal_net[[i]] <- prey_cals_net_nocost(IDs = benefits_prey[[i]])
+      mass <- if(length(mass_prey) == 1) mass_prey else mass_prey[i]
+
+      prey_cal_list[[i]] <- prey_cals_net(IDs = benefits_prey[[i]],
+                                          mass = mass,
+                                          speed = prey_speed[[i]],
+                                          t = t)
+
+        prey_cal_net[i] <- prey_cal_list[[i]]$cal_net
+        prey_costs[i] <- prey_cal_list[[i]]$costs
     }
     
     # count the encounters (only setup for a single predator/arena)
@@ -253,7 +248,7 @@ for(G in 1:GENS) {
                             lv = prey_lvs,
                             patches = unlist(patches),
                             cal_net = prey_cal_net,
-                            # costs = prey_costs,
+                            costs = prey_costs,
                             speed = unlist(prey_speed),
                             offspring = unlist(offspring_prey),
                             mass = mass_prey,
@@ -322,7 +317,6 @@ for(G in 1:GENS) {
     } #Closes the if statement
   } #closes loop over the number of prey
   
-  
   #Fitness of current generation
   # PRED_tau_p <- vector()
   # PRED_tau_v <- vector()
@@ -345,22 +339,19 @@ for(G in 1:GENS) {
     if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
     warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
     
-    save(prey_res, file = 'sim_results/supporting_analysis/June16_30000g_nocosts2_prey_res.Rda')
-    save(prey_details, file = 'sim_results/supporting_analysis/June16_30000g_nocosts2_prey_details.Rda')  
+    save(prey_res, file = 'sim_results/sensitivity/mass_dependent_costs/June23_5000000g_prey_res.Rda')
+    save(prey_details, file = 'sim_results/sensitivity/mass_dependent_costs/June23_5000000g_prey_details.Rda')  
     
     break
     }
   
   #save results
-  save(prey_res, file = 'sim_results/supporting_analysis/June16_30000g_nocosts2_prey_res.Rda')
-  save(prey_details, file = 'sim_results/supporting_analysis/June16_30000g_nocosts2_prey_details.Rda')    
+  save(prey_res, file = 'sim_results/sensitivity/mass_dependent_costs/June23_5000000g_prey_res.Rda')
+  save(prey_details, file = 'sim_results/sensitivity/mass_dependent_costs/June23_5000000g_prey_details.Rda')  
   
   # save predator results
   # save(pred_res, file = '')
   # save(pred_details, file = '')
-  
-  #progress report
-  print(G)
   
   toc(log = TRUE)
 }
@@ -383,6 +374,10 @@ prey_res_df$rel_sd <- sqrt(prey_res_df$rel_var)
 prey_summary <- prey_details_df %>%
   group_by(generation) %>%
   summarise(across(where(is.numeric), ~mean(.x, na.rm = TRUE)), .groups = "drop")
+
+prey_details_df_sum <- prey_details_df %>% 
+  filter(generation >= max(generation) - 49) %>% 
+  ungroup()
 
 # rel lv ~ generation
 rel.lv.gen <- ggplot(prey_res_df, aes(x = generation, y = rel.lv)) +
@@ -607,17 +602,26 @@ plots <- list(rel.lv.gen,
               taup.speed)
 
 final.plot <- wrap_plots(plots[1:10], ncol = 4)
-final <- final.plot + plot_annotation('Panel 1: 30000g, no costs, 1000 generations')
+final <- final.plot + plot_annotation('Panel 1: 100g, 723 generations')
 print(final)
-ggsave("~/H/GitHub/ballistic-movement/figures/no_costs/30000g_panel1.PNG", plot = final, width = 15, height = 8, dpi = 800)
+ggsave("~/H/GitHub/ballistic-movement/figures/varying_mass/constant_raster/100g_panel1.PNG", plot = final, width = 15, height = 8, dpi = 800)
 
 
 final.plot2 <- wrap_plots(plots[11:23], ncol = 4)
-final2 <- final.plot2 + plot_annotation('Panel 2: 30000g, no costs, 1000 generations')
+final2 <- final.plot2 + plot_annotation('Panel 2: 100g, 723 generations, last 50 generations')
 print(final2)
-ggsave("~/H/GitHub/ballistic-movement/figures/no_costs/30000g_panel2.PNG", plot = final2, width = 15, height = 8, dpi = 800)
+ggsave("~/H/GitHub/ballistic-movement/figures/varying_mass/constant_raster/100g_panel2.PNG", plot = final2, width = 15, height = 8, dpi = 800)
  
 
+gen.plots <- grid.arrange(rel.lv.gen, taup.gen, tauv.gen, speed.gen, ncol = 2, nrow = 2)
+
+ggsave(gen.plots, file = 'sim_results/sensitivity/30000g_finalpanel1.PNG', 
+       width = 11, height = 5, units = "in")
+
+other.plots <- grid.arrange(patches.lv, speed.lv, patches.speed, cal.lv, speed.cal, offspring.lv, ncol = 2, nrow = 3)
+
+ggsave(other.plots, file = 'sim_results/sensitivity/30000g_finalpanel2.PNG',
+       width = 11, height = 8, units = "in")
 
 
 
