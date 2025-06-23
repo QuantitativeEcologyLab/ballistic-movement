@@ -278,7 +278,7 @@ speed_val <- function(models){
   
   #ensure model_summary has $CI before accessing
   if(!is.null(model_summary$CI) && nrow(model_summary$CI) == 5){
-    SPEED <- model_summary$CI[4, "est"]
+    SPEED <- model_summary$CI[4, 2]
   } else {
     SPEED <- Inf
   }
@@ -286,6 +286,7 @@ speed_val <- function(models){
   #return speed
   return(SPEED)
 }
+
 
 #----------------------------------------------------------------------
 # define "lifespan" and sampling interval----
@@ -345,7 +346,6 @@ prey_cals_net <- function(IDs, mass, speed, t){
   #convert to cal/s
   E <- E * 239.005736
   
-  E <- E * 1.5
   
   #calculate total movement costs
   #cal/s to cal 
@@ -444,7 +444,7 @@ encounter <- function(prey.tracks, pred.tracks, range = 50){
 # Predator calorie intake
 #----------------------------------------------------------------------
 
-pred_cals_net <- function(encounters, mass, t){
+pred_cals_net <- function(encounters, mass, t, speed){
   
   time_total <- attr(t, "time_total")
   
@@ -477,7 +477,7 @@ pred_cals_net <- function(encounters, mass, t){
   
   pred_cal_net <- intake - move_cost
   
-  return(pred_cal_net)
+  return(list(cal_net = pred_cal_net, costs = move_cost))
 }
 
 #----------------------------------------------------------------------
@@ -489,10 +489,10 @@ pred.fitness <- function(mass,
                          pred_cal_net) 
 {
   #standardize mass input
-  if (length(mass) == 1) mass <- rep(mass, n_prey)
+  if (length(mass) == 1) mass <- rep(mass, n_pred)
   
   #update weight
-  pred_cal_net[cal_net < 0] <- 0 #prevent negative
+  pred_cal_net[pred_cal_net < 0] <- 0 #prevent negative
   growth_cal <- pred_cal_net*0.8 #allocation to soma
   repro_cal <- pred_cal_net*0.2 #allocation to reproduction
   
@@ -511,16 +511,11 @@ pred.fitness <- function(mass,
   offspring <- floor(W_R/W_B0) 
   
   #set offspring to 0 is cal_net <= 0
-  offspring[cal_net <= 0] <- 0
-  
-  #If predator encounters are being considered,
-  #individuals that encountered a predator are killed and don't reproduce.
-  if(!is.null(costs)){
-    offspring[costs] <- 0
-  }
+  offspring[pred_cal_net <= 0] <- 0
   
   #clamp minimum offspring to 0
   offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #clamp the minimum to 0
   
   return(list(offspring = offspring, mass_update = mass.update))
 }
+
