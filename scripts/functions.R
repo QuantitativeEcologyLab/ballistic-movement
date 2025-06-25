@@ -202,7 +202,7 @@ prey.mass <- function(mass, variance = FALSE) {
 #----------------------------------------------------------------------
 
 createFoodRaster <- function(mass, width, pred = FALSE, 
-                             calories = 15, 
+                             calories = 0.015, 
                              heterogeneity = FALSE) {
   
   #var[position]
@@ -344,8 +344,7 @@ prey_cals_net <- function(IDs, mass, speed, t){
   #convert to kJ/s
   E <- (E * mass/1000)/1000
   #convert to cal/s
-  E <- E * 239.005736
-  
+  E <- E * 0.239005736
   
   #calculate total movement costs
   #cal/s to cal 
@@ -393,11 +392,11 @@ prey.fitness <- function(mass,
   growth_cal <- cal_net*0.8 #allocation to soma
   repro_cal <- cal_net*0.2 #allocation to reproduction
   
-  weight.gain <- growth_cal / 5000
+  weight.gain <- growth_cal / 5
   mass.update <- mass + weight.gain
   
   #using mass allocated to reproduction to determine W_R
-  W_R <- repro_cal / 5000
+  W_R <- repro_cal / 5
   
   #birth weight via allometric scaling in mammals from Blueweiss et al. 1978 https://doi.org/10.1007/BF00344996
   #wet weight $\approx$ 0.75 total weight
@@ -460,7 +459,7 @@ pred_cals_net <- function(encounters, mass, t, speed){
   #convert to kJ/s
   E <- (E * mass/1000)/1000
   #convert to cal/s
-  E <- E * 239.005736
+  E <- E * 0.239005736
   
   # # Maximum running speed in km/hr from Hirt et al. 2017 https://doi.org/10.1038/s41559-017-0241-4
   # v_max <- 25.5 * (mass/1000)^(0.26) * (1 - exp(-22*(mass/1000)^(-0.66)))
@@ -496,11 +495,11 @@ pred.fitness <- function(mass,
   growth_cal <- pred_cal_net*0.8 #allocation to soma
   repro_cal <- pred_cal_net*0.2 #allocation to reproduction
   
-  weight.gain <- growth_cal / 5000
+  weight.gain <- growth_cal / 5
   mass.update <- mass + weight.gain
   
   #using mass allocated to reproduction to determine W_R
-  W_R <- repro_cal / 5000
+  W_R <- repro_cal / 5
   
   #birth weight via allometric scaling in mammals from Blueweiss et al. 1978 https://doi.org/10.1007/BF00344996
   #wet weight $\approx$ 0.75 total weight
