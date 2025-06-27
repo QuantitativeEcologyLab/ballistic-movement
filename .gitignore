@@ -51,3 +51,6 @@ rsconnect/
 # figures
 *.png
 *.PNG
+*.db
+*.Rda
+*.Rda
