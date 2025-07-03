@@ -55,6 +55,7 @@ rsconnect/
 !figures/
 !figures/supporting_analysis/
 !figures/supporting_analysis/costsvsnocosts_modelresults.png
+!figures/project_update/
 
 # other
 *.db
