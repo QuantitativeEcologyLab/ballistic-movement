@@ -1,7 +1,7 @@
 # Preamble ----
 
 # Set the working directory
-setwd("~/H/GitHub/ballistic-movement")
+setwd("~/hdrive/GitHub/ballistic-movement")
 # Set the random seed
 set.seed(123)
 
@@ -29,7 +29,7 @@ Ncores <- 10
 # mass_pred <- 15000
 
 # Prey mass (g)
-mass_prey <- 5000000
+mass_prey <- 30000
 
 #set sampling interval and lifespan
 t <- sampling(mass_prey)
@@ -39,13 +39,13 @@ n_prey <- 10
 # n_pred <- 1
 
 #number of arenas
-REPS <- 1
+REPS <- 5
 
 #number of generations
-GENS <- 100
+GENS <- 10
 
 #build food raster
-FOOD <- createFoodRaster(mass_prey, calories = 0.015, width = round(sqrt(prey.SIG(mass_prey)))/10, heterogeneity = FALSE)
+FOOD <- makefood(mass_prey, calories = 0.015, width = round(sqrt(prey.SIG(mass_prey))/10), heterogeneity = FALSE)
 
 #lists for storing results
 prey_res <- list()
@@ -54,6 +54,7 @@ prey_details <- list()
 # pred_res <- list()
 # pred_details <- list()
 
+#start the simulation ----
 for(G in 1:GENS) {
   tic(paste("Generation", G))
   
@@ -79,6 +80,7 @@ for(G in 1:GENS) {
         prey_sig <- prey.SIG(mass_prey)
         prey_lv <- sqrt((prey_tau_v/prey_tau_p) * prey_sig)
         
+        # create ctmm model
         PREY_mods[[i]] <- ctmm(tau = c(prey_tau_p, prey_tau_v),
                                mu = c(CENTRES[i,1], CENTRES[i,2]),
                                sigma = prey_sig)
@@ -108,13 +110,13 @@ for(G in 1:GENS) {
       
       PREY_mods <- list()
       for(i in 1:n_prey){
-        prey_tau_p <- sample(PREY_tau_p,1) + rnorm(1, 0, 10)
-        prey_tau_p <- ctmm:::clamp(prey_tau_p, min = 0.1, max = Inf)
-        prey_tau_v <- sample(PREY_tau_v,1) + rnorm(1, 0, 2)
-        prey_tau_v <- ctmm:::clamp(prey_tau_v, min = 0.1, max = Inf)
+        prey_tau_p <- sample(PREY_tau_p,1)
+        prey_tau_v <- sample(PREY_tau_v,1) + rnorm(1, 0, 2) # add 'mutation' based variance
+        prey_tau_v <- ctmm:::clamp(prey_tau_v, min = 0.1, max = Inf) # clamp the minimum to 0
         prey_sig <- sample(PREY_sig,1)
         prey_lv <- sqrt((prey_tau_v/prey_tau_p)*prey_sig)
         
+        # create ctmm model
         PREY_mods[[i]] <- ctmm(tau = c(prey_tau_p, prey_tau_v),
                                mu = c(CENTRES[i,1], CENTRES[i,2]),
                                sigma = prey_sig)
@@ -175,7 +177,7 @@ for(G in 1:GENS) {
     #extract prey speed from model
     prey_speed <- numeric(n_prey)
     for(i in 1:n_prey){
-      prey_speed[[i]] <- speed_val(models = PREY_mods[[i]])
+      prey_speed[[i]] <- get.speed(models = PREY_mods[[i]])
     }
     
     #extract predator speed from model
@@ -191,7 +193,7 @@ for(G in 1:GENS) {
     for(i in 1:n_prey){
       mass <- if(length(mass_prey) == 1) mass_prey else mass_prey[i]
 
-      prey_cal_list[[i]] <- prey_cals_net(IDs = benefits_prey[[i]],
+      prey_cal_list[[i]] <- prey.cals.net(IDs = benefits_prey[[i]],
                                           mass = mass,
                                           speed = prey_speed[[i]],
                                           t = t)
@@ -199,6 +201,11 @@ for(G in 1:GENS) {
         prey_cal_net[i] <- prey_cal_list[[i]]$cal_net
         prey_costs[i] <- prey_cal_list[[i]]$costs
     }
+    
+    # prey_cal_net <- numeric(n_prey)
+    # for(i in 1:n_prey){
+    #   prey_cal_net[[i]] <- prey_cals_net_nocost(IDs = benefits_prey[[i]])
+    # }
     
     # count the encounters (only setup for a single predator/arena)
     # encounters <- encounter(prey.tracks = PREY_tracks,
@@ -222,11 +229,12 @@ for(G in 1:GENS) {
     # }
     
     # compute prey offspring
+    # output is a list of two variables
     prey_results <- prey.fitness(mass = mass_prey,
                                  cal_net = prey_cal_net)
     
-    offspring_prey <- prey_results$offspring
-    mass_update_prey <- prey_results$mass_update
+    offspring_prey <- prey_results$offspring #assign offspring 
+    mass_update_prey <- prey_results$mass_update #assign mass update
     
     # compute predator offspring
     # pred_results <- pred.fitness(mass = mass_pred,
@@ -346,15 +354,15 @@ for(G in 1:GENS) {
     if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
     warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
     
-    #save(prey_res, file = 'sim_results/calories_sensitivity/5000000g_11cal_prey_res.Rda')
-    #save(prey_details, file = 'sim_results/calories_sensitivity/5000000g_11cal_prey_details.Rda')  
+    # save(prey_res, file = 'sim_results/sensitivity/increased_sampling/5000000g_heldtaup_prey_res.Rda')
+    # save(prey_details, file = 'sim_results/sensitivity/increased_sampling/5000000g_heldtaup_prey_details.Rda')  
     
     break
     }
   
   #save results
-  #save(prey_res, file = 'sim_results/calories_sensitivity/5000000g_11cal_prey_res.Rda')
-  #save(prey_details, file = 'sim_results/calories_sensitivity/5000000g_11cal_prey_details.Rda')    
+  # save(prey_res, file = 'sim_results/sensitivity/increased_sampling/5000000g_heldtaup_prey_res.Rda')
+  # save(prey_details, file = 'sim_results/sensitivity/increased_sampling/5000000g_heldtaup_prey_details.Rda')    
   
   # save predator results
   # save(pred_res, file = 'sim_results/constant_resources_withpred/June23_15000gpredator_pred_res.Rda')
@@ -363,10 +371,12 @@ for(G in 1:GENS) {
   toc(log = TRUE)
 }
 
-
 #----------------------------------------------------------------------
 # make diagnostic figures----
 #----------------------------------------------------------------------
+
+# load('sim_results/constant_resources_nopred/100g_prey_res.Rda')
+# load('sim_results/constant_resources_nopred/100g_prey_details.Rda')
 
 # make data sets compatible
 prey_res_df <- do.call(rbind, prey_res)
@@ -374,7 +384,6 @@ prey_details_df <- do.call(rbind, prey_details)
 
 # pred_res_df <- do.call(rbind, pred_res)
 # pred_details_df <- do.call(rbind, pred_details)
-
 
 # relative change in lv ~ gen
 PREY_LV <- prey_res_df$lv[1]
@@ -403,70 +412,70 @@ rel.lv.gen <- ggplot(prey_res_df, aes(x = generation, y = rel.lv)) +
 
 # tau_v ~ generation
 tauv.gen <- ggplot(prey_summary, aes(x = generation, y = tau_v)) +
-  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1)+
+  geom_line(col = "deeppink4", linewidth = 1)+
   labs(x = "generation", y = "tau_v") +
   theme_minimal()
 # print(tauv.gen)
 
 # tau_p ~ generation
 taup.gen <- ggplot(prey_summary, aes(x = generation, y = tau_p)) +
-  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1)+
+  geom_line(col = "deeppink4", linewidth = 1)+
   labs(x = "generation", y = "tau_p") +
   theme_minimal()
 # print(taup.gen)
 
 # sig ~ generation
 sig.gen <- ggplot(prey_summary, aes(x = generation, y = sig)) +
-  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  geom_line(col = "deeppink4", linewidth = 1) +
   labs(x = "generation", y = "sig") +
   theme_minimal()
 # print(sig.gen)
 
 # lv ~ generation
 lv.gen <- ggplot(prey_summary, aes(x = generation, y = lv)) +
-  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  geom_line(col = "deeppink4", linewidth = 1) +
   labs(x = "generation", y = "lv") +
   theme_minimal()
 # print(lv.gen)
 
 # patches ~ generation
 patches.gen <- ggplot(prey_summary, aes(x = generation, y = patches)) +
-  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  geom_line(col = "deeppink4", linewidth = 1) +
   labs(x = "generation", y = "patches visited") +
   theme_minimal()
 # print(patches.gen)
 
 # cost ~ generation
 cost.gen <- ggplot(prey_summary, aes(x = generation, y = costs)) +
-  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  geom_line(col = "deeppink4", linewidth = 1) +
   labs(x = "generation", y = "metabolic costs (cal)") +
   theme_minimal()
 # print(cost.gen)
 
 # cal_net ~ generation
 cal.gen <- ggplot(prey_summary, aes(x = generation, y = cal_net)) +
-  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  geom_line(col = "deeppink4", linewidth = 1) +
   labs(x = "generation", y = "net calories") +
   theme_minimal()
 # print(cal.gen)
 
 # speed ~ generation
 speed.gen <- ggplot(prey_summary, aes(x = generation, y = speed)) +
-  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  geom_line(col = "deeppink4", linewidth = 1) +
   labs(x = "generation", y = "speed (m/s)") +
   theme_minimal()
 # print(speed.gen)
 
 # offspring ~ generation
 offspring.gen <- ggplot(prey_summary, aes(x = generation, y = offspring)) +
-  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  geom_line(col = "deeppink4", linewidth = 1) +
   labs(x = "generation", y = "offspring") +
   theme_minimal()
 # print(offspring.gen)
 
 # mass ~ gen
 mass.gen <- ggplot(prey_summary, aes(x = generation, y = mass_update)) +
-  stat_summary(fun = mean, geom = "line", col = "deeppink4", linewidth = 1) +
+  geom_line(col = "deeppink4", linewidth = 1) +
   labs(x = "generation", y = "mass_updated (g)") +
   theme_minimal()
 # print(mass.gen)
@@ -532,7 +541,7 @@ cost.speed <- ggplot(prey_details_df, aes(x = speed, y = costs)) +
 # speed ~ cal_net 
 speed.cal <- ggplot(prey_details_df, aes(x = speed, y = cal_net)) +
   geom_point(col = "deeppink4", alpha = 0.3) +
-  labs(x = "speed", y = "cal_net") +
+  labs(x = "speed", y = "net calories") +
   theme_minimal()
 # print(speed.cal)
 
@@ -591,7 +600,7 @@ plots <- list(rel.lv.gen,
               sig.gen,
               lv.gen,
               patches.gen,
-              # cost.gen,
+              cost.gen,
               offspring.gen,
               cal.gen,
               mass.gen,
@@ -600,27 +609,27 @@ plots <- list(rel.lv.gen,
               speed.lv,
               patches.speed,
               cal.lv,
-              offspring.lv,
-              # cost.speed,
+              speed.cal,
+              cost.speed,
               offspring.speed,
+              offspring.lv,
               cal.mass,
               speed.mass,
-              speed.cal,
-              # cost.mass,
+              cost.mass,
               offspring.mass,
               offspring.cal,
               patches.off,
               taup.speed)
 
-final.plot <- wrap_plots(plots[1:10], ncol = 4)
-final <- final.plot + plot_annotation('Panel 1: 5000000g, 11 calories')
+final.plot <- wrap_plots(plots[1:11], ncol = 3)
+final <- final.plot + plot_annotation('Panel 1: 5000000g, 23 calories, 1/100th tau_v interval')
 print(final)
-ggsave("~/H/GitHub/ballistic-movement/sim_results/calories_sensitivity/5000000g_11cal_v2_panel1.PNG", plot = final, width = 15, height = 8, dpi = 800)
+#ggsave(file = 'sim_results/sensitivity/increased_sampling/figures/5000000g_100th_panel1.png', plot = final, width = 15, height = 8, dpi = 800)
 
-final.plot2 <- wrap_plots(plots[11:23], ncol = 4)
-final2 <- final.plot2 + plot_annotation('Panel 2: 5000000g, 11 calories')
+final.plot2 <- wrap_plots(plots[12:25], ncol = 5)
+final2 <- final.plot2 + plot_annotation('Panel 2: 5000000g, 23 calories, 1/100th tau_v interval')
 print(final2)
-ggsave("~/H/GitHub/ballistic-movement/sim_results/calories_sensitivity/5000000g_11cal_v2_panel2.PNG", plot = final2, width = 15, height = 8, dpi = 800)
+#ggsave(file = 'sim_results/sensitivity/increased_sampling/figures/5000000g_100th_panel2.png', plot = final2, width = 12, height = 8, dpi = 900, bg = "white")
  
 
 gen.plots <- grid.arrange(rel.lv.gen, taup.gen, tauv.gen, speed.gen, ncol = 2, nrow = 2)
@@ -630,9 +639,107 @@ ggsave(gen.plots, file = 'sim_results/sensitivity/30000g_finalpanel1.PNG',
 
 other.plots <- grid.arrange(patches.lv, speed.lv, patches.speed, cal.lv, speed.cal, offspring.lv, ncol = 2, nrow = 3)
 
-ggsave(other.plots, file = 'sim_results/sensitivity/30000g_finalpanel2.PNG',
-       width = 11, height = 8, units = "in")
+#ggsave(other.plots, file = 'sim_results/sensitivity/30000g_finalpanel2.PNG', width = 11, height = 8, units = "in")
 
 
 
+#plot raster with track
+df_raster <- as.data.frame(FOOD, xy = TRUE)
+colnames(df_raster) <- c("x", "y", "calories")
+
+prey_list <- lapply(seq_along(PREY_tracks), function(i){
+  df <- as.data.frame(PREY_tracks[[i]])
+  colnames(df)[2:3] <- c("x", "y")
+  return(df)
+})
+all_prey_df <- do.call(rbind, prey_list)
+
+xlines <- unique(df_raster$x)
+ylines <- unique(df_raster$y)
+
+ggplot() +
+  geom_raster(data = df_raster, aes(x = x, y = y, fill = calories)) +
+  geom_vline(xintercept = xlines, color = "white", alpha = 0.5) +
+  geom_hline(yintercept = ylines, color = "white", alpha = 0.5) +
+  scale_fill_viridis_c() +
+  geom_path(data = all_prey_df, aes(x = x, y = y), color = "black", linewidth = 0.7, alpha = 0.8) +
+  coord_equal() +
+  theme_minimal() 
+
+ggsave(file = 'figures/30000g_movepath.png', width = 8, height = 8, dpi = 900, bg = "white")
+
+#........................................................................
+# reduced diagnostics ----
+
+lastgens <- prey_details_df %>%
+  filter(generation <= min(generation) + 99) 
+
+p1 <-ggplot(lastgens, aes(x = generation, y = lv)) +
+  stat_summary(fun = mean, geom = "line", col = "steelblue") +
+  labs(title = "mean l_v over generations") +
+  theme_minimal()
+
+#tau_v vs generation
+p2 <- ggplot(lastgens, aes(x = generation, y = tau_v)) +
+  stat_summary(fun = mean, geom = "line", col = "steelblue") +
+  labs(title = "mean tau_v over generations") +
+  theme_minimal()
+
+#tau_p vs generation
+p3 <- ggplot(lastgens, aes(x = generation, y = tau_p)) +
+  stat_summary(fun = mean, geom = "line", col = "steelblue") +
+  labs(title = "mean tau_p over generations") +
+  theme_minimal()
+
+#lv vs patches
+p4 <- ggplot(lastgens, aes(x = lv, y = patches)) +
+  geom_point(col = "steelblue", alpha = 0.3) +
+  labs(title = "lv vs patches") +
+  theme_minimal()
+
+#lv vs speed
+p5 <- ggplot(lastgens, aes(x = lv, y = speed)) +
+  geom_point(col = "steelblue", alpha = 0.3) +
+  labs(title = "lv vs speed", y = "speed (m/s)") +
+  ylim(0, 100) +
+  theme_minimal()
+
+#speed vs patches
+p6 <- ggplot(lastgens, aes(x = speed, y = patches)) +
+  geom_point(col = "steelblue", alpha = 0.3) +
+  labs(title = "patches vs speed", x = "speed (m/s)") +
+  xlim(0, 100) +
+  theme_minimal()
+
+#speed vs calories
+p7 <- ggplot(lastgens, aes(x = speed, y = cal_net)) +
+  geom_point(col = "steelblue", alpha = 0.3) +
+  labs(title = "calories gained vs speed", x = "speed (m/s)") +
+  xlim(0, 100) +
+  ylim(-100, 9000) +
+  theme_minimal()
+
+#calories vs lv
+p8 <- ggplot(lastgens, aes(x = lv, y = cal_net)) +
+  geom_point(col = "steelblue", alpha = 0.3) +
+  labs(title = "calories gained vs l_v") +
+  ylim(-100, 9000) +
+  theme_minimal()
+
+#offspring vs lv
+p9 <- ggplot(lastgens, aes(x = lv, y = offspring)) +
+  geom_point(col = "steelblue", alpha = 0.3) +
+  labs(title = "offspring vs l_v") +
+  theme_minimal()
+
+p10 <- ggplot(lastgens, aes(x = speed, y = offspring)) +
+  geom_point(col = "steelblue", alpha = 0.3) +
+  labs(title = "offspring vs speed", x = "speed (m/s)") +
+  xlim(0, 100) +
+  theme_minimal()
+
+FIG <- grid.arrange(p1,p2,p3,p4,p5,p6,p7,p8,p9,p10, ncol = 3, nrow = 4, top = "100g, generations 500 to 1000")
+
+
+#ggsave(FIG, file = '~/hdrive/GitHub/ballistic-movement/sim_results/sensitivity/100g_case_study/500_to_1000_gens.png', width = 12, height = 8, dpi = 900, bg = "white")
 

@@ -10,16 +10,66 @@
 #----------------------------------------------------------------------
 # Package import
 
-library(ctmm)
-library(raster)
-library(terra)
+library(ctmm) #for generating movement models
+library(raster) #for creating the food raster
+library(terra) #for creating the food raster
+
+#----------------------------------------------------------------------
+# create figure theme----
+#----------------------------------------------------------------------
+
+theme.qel <- function(legend = TRUE){
+  theme <- theme_bw() +
+    theme(panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          axis.title.y = element_text(size=6, family = "sans", face = "bold"),
+          axis.title.x = element_text(size=6, family = "sans", face = "bold"),
+          axis.text.y = element_text(size=4, family = "sans"),
+          axis.text.x  = element_text(size=4, family = "sans"),
+          plot.title = element_text(hjust = -0.05, size = 12, family = "sans", face = "bold"),
+          plot.background = element_rect(fill = "transparent", color = NA),
+          plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm"))
+  if(legend){
+    theme <- theme +
+      theme(
+        legend.position = "right",
+        legend.text = element_text(size = 4, family = "sans"),
+        legend.title = element_text(size = 5, family = "sans", face = "bold"),
+        legend.key.size = unit(0.2, "cm"),
+        legend.spacing.y = unit(0.1, "cm"),
+        legend.margin = margin(0,0,0,0),
+        legend.background = element_rect(fill = "transparent", color = NA),
+        legend.key = element_rect(fill = "transparent", color = NA),
+        panel.background = element_rect(fill = "transparent"))
+  } else {
+     theme <- theme + 
+       theme(legend.position = "none")
+   }
+
+  return(theme)
+  
+}
 
 #----------------------------------------------------------------------
 # Calculate the euclidean distance between two points----
 #----------------------------------------------------------------------
 
+#used to help calculate encounters
 SLD <- function(x_1, y_1, x_2, y_2){
   sqrt((x_1 - x_2)^2 + (y_1 - y_2)^2)
+}
+
+#----------------------------------------------------------------------
+# re-parameterize rgamma() as a function of mean and variance----
+#----------------------------------------------------------------------
+
+#used to add variance in movement parameters and food raster
+rgamma2 <- function(mu, sigma2, N = n()) {
+  # mean = k * theta
+  # sigma^2 = k * theta^2
+  rgamma(n = N,
+         shape = mu^2 / sigma2, # (k * theta)^2 / (k * theta^2)
+         scale = sigma2 / mu) # (k * theta^2) / (k * theta)
 }
 
 #----------------------------------------------------------------------
@@ -76,7 +126,10 @@ prey.SIG <- function(mass, variance = FALSE) {
   #Convert from 95% HR to var[position]
   SIG <- HR/(-2*log(0.05)*pi)
   #Add variance if desired
-  if(variance == TRUE){SIG <- rchisq(n = length(mass), df = SIG)}
+  if(variance == TRUE){
+    sigma2 <-SIG * 10
+    SIG <- rgamma2(SIG, sigma2, N = length(mass))
+  }
   #Return
   return(SIG)
 }
@@ -95,9 +148,7 @@ prey.tau_p <- function(mass, variance = FALSE) {
   #Add variance if desired
   if(variance == TRUE){
     sigma2 <- tau_p * 10
-    tau_p <- rgamma(n = length(mass),
-                    shape = tau_p^2 / sigma2,
-                    scale = sigma2 / tau_p)}
+    tau_p <- rgamma2(tau_p, sigma2, N = length(mass))}
   #Return
   return(tau_p)
 }
@@ -116,9 +167,7 @@ prey.tau_v <- function(mass, variance = FALSE) {
   #Add variance if desired
   if(variance == TRUE){
     sigma2 <- tau_v * 10
-    tau_v <- rgamma(n = length(mass),
-                    shape = tau_v^2 / sigma2,
-                    scale = sigma2 / tau_v)}
+    tau_v <- rgamma2(tau_v, sigma2, N = length(mass))}
   #Return
   return(tau_v)
 }
@@ -137,11 +186,12 @@ pred.SIG <- function(mass, variance = FALSE) {
   #Convert from 95% HR to var[position]
   SIG <- HR/(-2*log(0.05)*pi)
   #Add variance if desired
-  if(variance == TRUE){SIG <- rchisq(n = length(mass), df = SIG)}
+  if(variance == TRUE){
+    sigma2 <-SIG * 10
+    SIG <- rgamma2(SIG, sigma2, N = length(mass))}
   #Return
   return(SIG)
 }
-
 
 #----------------------------------------------------------------------
 # Generate predator E[tau_p] based on mass (in g)----
@@ -155,7 +205,10 @@ pred.tau_p <- function(mass, variance = FALSE) {
   #Back transform
   tau_p <- 10^(tau_p)
   #Add variance if desired
-  if(variance == TRUE){tau_p <- rchisq(n = length(mass), df = tau_p)}
+  if(variance == TRUE){
+    sigma2 <- tau_p * 10
+    tau_p <- rgamma2(tau_p, sigma2, N = length(mass))
+  }
   #Return
   return(tau_p)
 }
@@ -172,7 +225,9 @@ pred.tau_v <- function(mass, variance = FALSE) {
   #Back transform
   tau_v <- 10^(tau_v)
   #Add variance if desired
-  if(variance == TRUE){tau_v <- rchisq(n = length(mass), df = tau_v)}
+  if(variance == TRUE){
+    sigma2 <- tau_v * 10
+    tau_v <- rgamma2(tau_v, sigma2, N = length(mass))}
   #Return
   return(tau_v)
 }
@@ -201,7 +256,9 @@ prey.mass <- function(mass, variance = FALSE) {
 # Generate raster of food patches based on mass_prey (g)----
 #----------------------------------------------------------------------
 
-createFoodRaster <- function(mass, width, pred = FALSE, 
+# food raster function utilizing patches per 95% HR area (new)
+
+createFoodRaster <- function(mass, k, pred = FALSE, 
                              calories = 0.015, 
                              heterogeneity = FALSE) {
   
@@ -212,10 +269,50 @@ createFoodRaster <- function(mass, width, pred = FALSE,
   #range of raster based on 99.9% HR area
   EXT <- round(sqrt((-2*log(0.0001)*pi)* SIG))
   
-  #number of patches based on fixed patch width
-  #N <- ceiling(2*EXT/width)
+  # 95% HR radius
+  HR <- round(sqrt((-2*log(0.05)*pi)*SIG))
+
+  # 95% HR area
+  HR_area <- pi * HR^2
+  # area of each patch based on set number of patches in 95% HR
+  patch_area <- HR_area / k #where k is the number of patches in the 95% HR
+  # back calculate the width of each patch
+  width <- sqrt(patch_area)
+  
+  # assign number of cells based on EXT and width
+  N <- ceiling(2 * EXT / width)
+  
+  #create raster with terra
+  food_raster <- rast(ncol = N, nrow = N,
+                      xmin = -EXT, xmax = EXT,
+                      ymin = -EXT, ymax = EXT)
+  
+  #assign caloric values to cells
+  values(food_raster) <- calories # calories is defined as calories per patch
+  
+  #return calorie raster
+  return(food_raster)
+}
+
+#..............................................................................
+# old food raster function, using patch width scaled to prey.SIG
+# use for seed2STEM heterogeneity investigation
+
+makefood <- function(mass, width, pred = FALSE, 
+                     calories = 0.015, # calories per unit area
+                     heterogeneity = FALSE) {
+  
+  #var[position]
+  if(pred){SIG <- pred.SIG(mass)} else{
+    SIG <- prey.SIG(mass)}
+  
+  #range of raster based on 99.9% HR area
+  EXT <- round(sqrt((-2*log(0.0001)*pi)* SIG))
+  
+  #calculate the number of cells based on the EXT and the cell width
   N <- EXT / width
   
+  #calculate patch area from width
   patch_area <- width^2
   
   #create raster with terra
@@ -223,11 +320,15 @@ createFoodRaster <- function(mass, width, pred = FALSE,
                       xmin = -EXT, xmax = EXT,
                       ymin = -EXT, ymax = EXT)
   
-  #assign biomass values to raster
+  cal_per_patch <- calories * patch_area # convert cal_per_m2 to cal_per_patch
+  var <- 10
+  sigma2 <- cal_per_patch * var # creates sigma value, increase var to increase the variance
+  
+  #assign caloric values to raster
   if (heterogeneity) {
-    values(food_raster) <- runif(ncell(food_raster), min = 0.1, max = 5) * calories * patch_area
+    values(food_raster) <- rgamma2(mu = cal_per_patch, sigma2 = sigma2, N = ncell(food_raster))
   } else {
-    values(food_raster) <- calories * patch_area
+    values(food_raster) <- cal_per_patch
   }
   #return calorie raster
   return(food_raster)
@@ -245,16 +346,16 @@ grazing <- function(track, habitat) {
   #patch identities
   IDs <- cellFromXY(habitat, coords)
   
-  #count the number of times it moved to a new food patch
+  #count the number of times it moved to a new food patch (total movements)
   PATCHES <- sum(diff(IDs) != 0)
   
   #mean time between patches 
   TIME <- mean(rle(c(FALSE, diff(IDs) != 0))$lengths)
   
-  #find indices for when it moved to a new food patch
+  #find indices (cell identity) for when it moved to a new food patch
   entry_ids <- c(1, which(diff(IDs) != 0) + 1)
   
-  #get Ids for those patches
+  #get IDs for those patches
   entry_IDs <- IDs[entry_ids]
   
   #get values from the raster
@@ -272,7 +373,7 @@ grazing <- function(track, habitat) {
 # extract speed----
 #----------------------------------------------------------------------
 
-speed_val <- function(models){
+get.speed <- function(models){
   #extract movement speeds from the models
   model_summary <- summary(models, units = FALSE)
   
@@ -287,21 +388,21 @@ speed_val <- function(models){
   return(SPEED)
 }
 
-
 #----------------------------------------------------------------------
 # define "lifespan" and sampling interval----
 #----------------------------------------------------------------------
 
 #sampling function with lifespan scaled to body mass
 
-sampling <- function(mass) {
+sampling <- function(mass, x = 1) {
   
   #calculate lifespan in seconds from de Magalhaes et al (2008) https://doi.org/10.1093/gerona/62.2.149
   lifespan <- (4.88*mass^0.153) * 31536000 # years to seconds
   time_total <- lifespan * 0.001 # 1/1000 of a lifespan
   
   #sampling interval (tau_v) in seconds
-  interval <- max(1, round(prey.tau_v(mass)))
+  #increasing x decreases interval, making sampling more frequent
+  interval <- max(1, round(prey.tau_v(mass))) / x
   
   #lifespan and sampling interval for simulations
   t <- seq(0,
@@ -320,9 +421,8 @@ sampling <- function(mass) {
 # net calories from grazing----
 #----------------------------------------------------------------------
 
-prey_cals_net <- function(IDs, mass, speed, t){
+prey.cals.net <- function(IDs, mass, speed, t){
   
-  interval <- attr(t, "interval")
   time_total <- attr(t, "time_total")
   
   #extract calorie values from which the movement track overlaps
@@ -338,12 +438,11 @@ prey_cals_net <- function(IDs, mass, speed, t){
   
   #calculate total BMR cost over sample period 
   # BMR_cost <- BMR * time_total
-  # 
+  
   #calculate movement cost (watts/kg) from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1
-  E <- 10.7 * (mass / 1000)^(-0.316) * speed + 6.03 * (mass / 1000)^(-0.303)
-  #convert to kJ/s
+  E <- 10.7 * (mass / 1000)^(-0.316) * speed + 6.03 * (mass / 1000)^(-0.303)  #convert to kJ/s
   E <- (E * mass/1000)/1000
-  #convert to cal/s
+  #convert to kcal/s
   E <- E * 0.239005736
   
   #calculate total movement costs
@@ -360,7 +459,9 @@ prey_cals_net <- function(IDs, mass, speed, t){
   return(list(cal_net = cal_net, costs = move_cost))
 }
 
-#..............................................................................
+#.........................................................................
+# test function with no costs of movement of metabolism
+#.........................................................................
 
 prey_cals_net_nocost <- function(IDs){
   
@@ -455,7 +556,7 @@ pred_cals_net <- function(encounters, mass, t, speed){
   # BMR <- (BMR * 239.005736) / 86400
   
   #calculate movement cost (watts/kg) from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1
-  E <- 10.7 * (mass / 1000)^(-0.316) * speed + 6.03 * (mass / 1000)^(-0.303)
+  E <- 10.7 * (mass / 1000)^(-0.316) * (speed) + 6.03 * (mass / 1000)^(-0.303)
   #convert to kJ/s
   E <- (E * mass/1000)/1000
   #convert to cal/s
