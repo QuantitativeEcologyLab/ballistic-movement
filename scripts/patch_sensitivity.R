@@ -108,10 +108,89 @@ thin <- function(track, food, t_thin){
   ))
 }
 
+prey.cals.net.sens <- function(IDs, mass, speed, t){
+  
+  time_total <- attr(t, "time_total")
+  
+  #extract calorie values from which the movement track overlaps
+  patch_values <- attr(IDs, "patch_values")
+  cal_gross <- sum(patch_values, na.rm = TRUE)
+  
+  #metabolic rate (kj/day) from Nagy 1987 https://doi.org/10.2307/1942620
+  # BMR <- 0.774 + 0.727 * log10(mass)
+  # #back transform
+  # BMR <- 10^BMR
+  # #convert to cal/s
+  # BMR <- (BMR * 239.005736) / 86400
+  
+  #calculate total BMR cost over sample period 
+  # BMR_cost <- BMR * time_total
+  
+  #calculate movement cost (watts/kg) from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1
+  E <- 10.7 * (mass / 1000)^(-0.316) * speed + 6.03 * (mass / 1000)^(-0.303)  #convert to kJ/s
+  E <- (E * mass/1000)/1000
+  #convert to kcal/s
+  E <- E * 0.239005736
+  
+  #calculate total movement costs
+  #cal/s to cal 
+  move_cost <- E * time_total
+  
+  #calculate total energetic costs
+  # cost_total <- BMR_cost * 0.2 + move_cost
+  
+  #assign net calories
+  cal_net <- cal_gross - move_cost
+  
+  #return cal_net and cal_max
+  return(cal_net)
+}
+
+prey.fitness.sens <- function(mass, 
+                         cal_net,
+                         costs = NULL) 
+{
+  #standardize mass input
+  # if (length(mass) == 1) mass <- rep(mass, n_prey)
+  
+  #update weight
+  cal_net[cal_net < 0] <- 0 #prevent negative
+  growth_cal <- cal_net*0.8 #allocation to soma
+  repro_cal <- cal_net*0.2 #allocation to reproduction
+  
+  weight.gain <- growth_cal / 5
+  mass.update <- mass + weight.gain
+  
+  #using mass allocated to reproduction to determine W_R
+  W_R <- repro_cal / 5
+  
+  #birth weight via allometric scaling in mammals from Blueweiss et al. 1978 https://doi.org/10.1007/BF00344996
+  #wet weight $\approx$ 0.75 total weight
+  ##therefore dry mass $\approx$ 0.25 from Fusch et al. 1999 https://doi.org/10.1203/00006450-199910000-00018
+  W_B0 <- 0.25*(0.097*mass.update^(0.92))
+  
+  #total offspring based on updated mass
+  offspring <- floor(W_R/W_B0) 
+  
+  #set offspring to 0 is cal_net <= 0
+  offspring[cal_net <= 0] <- 0
+  
+  #If predator encounters are being considered,
+  #individuals that encountered a predator are killed and don't reproduce.
+  if(!is.null(costs)){
+    offspring[costs] <- 0
+  }
+  
+  #clamp minimum offspring to 0
+  offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #clamp the minimum to 0
+  
+  return(offspring)
+}
+
 #create function to generate tracks and calculate offspring for kcal/patch analysis
 get.kcal.tracks <- function(mass_prey, k, cal) {
   
-  t <- sampling(mass_prey, x = 35)
+  t <- sampling(mass_prey, x = 40.5)
   
   interval <- attr(t, "interval")
   
@@ -137,12 +216,12 @@ get.kcal.tracks <- function(mass_prey, k, cal) {
   
   prey_speed <- get.speed(models = PREY_mods)
   
-  prey_gains <- prey.cals.net(IDs = benefits_prey,
+  prey_gains <- prey.cals.net.sens(IDs = benefits_prey,
                               mass = mass_prey,
                               speed = prey_speed,
                               t = t)
   
-  offspring <- prey.fitness(mass = mass_prey,
+  offspring <- prey.fitness.sens(mass = mass_prey,
                             cal_net = prey_gains)
   
   prey <- data.frame(patches = unlist(patches),
@@ -173,8 +252,8 @@ param_grid <- expand.grid(
 
 #create lists for storing results
 patch_results <- list()
-# tracks <- list()
-# food <- list()
+tracks <- list()
+food <- list()
 
 #begin sensitivity analysis
 for(i in 1:nrow(param_grid)){
@@ -192,8 +271,8 @@ for(i in 1:nrow(param_grid)){
   
   #store results
   patch_results[[i]] <- res$prey_details
-  # tracks[[i]] <- res$tracks
-  # food[[i]] <- res$food
+  tracks[[i]] <- res$tracks
+  food[[i]] <- res$food
   
   #save results
   save(patch_results, file = "sim_results/sensitivity/supplementary/data/100g_vary_k.Rda")
@@ -356,22 +435,23 @@ save(tracks_comb, file = "sim_results/sensitivity/supplementary/data/100g_vary_i
 #--------------------------------------------------------------------------
 
 #prey mass
-mass_prey <- 30000
+mass_prey <- 100
 
 #create grid of values to test
 param_grid <- expand.grid(
-  cal = seq(0, 10, 0.5))
+  cal = c(0.00015, 0.0002, 0.00025, 0.00035, 0.0004, 0.00045))
 
 #set number of patches in 95% HR area
-k <- 100000
+k <- 240000
 
 #create lists for storing results
 patch_results <- list()
-tracks <- list()
-food <- list()
+# tracks <- list()
+# food <- list()
 
 #begin sensitivity analysis
 for(i in 1:nrow(param_grid)){
+  tic()
   set.seed(5) # set seed at beginning to make movement paths identical
   
   cal <- param_grid$cal[i] # assign the k value for each test
@@ -385,11 +465,12 @@ for(i in 1:nrow(param_grid)){
   
   #store results
   patch_results[[i]] <- res$prey_details
-  tracks[[i]] <- res$tracks
-  food[[i]] <- res$food
+  # tracks[[i]] <- res$tracks
+  # food[[i]] <- res$food
   
   #save results
-  save(patch_results, file = "sim_results/sensitivity/supplementary/data/30000g_vary_kcal_per_patch.Rda")
+  save(patch_results, file = "sim_results/sensitivity/supplementary/data/100g_vary_kcal_per_patch3.Rda")
+  toc(log = TRUE)
 }
 
 #convert to data frame to use in ggplot
