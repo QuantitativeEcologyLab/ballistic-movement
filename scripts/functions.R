@@ -457,7 +457,7 @@ prey.cals.net <- function(IDs, mass, speed, t){
   cal_net <- cal_gross - move_cost
   
   #return cal_net and cal_max
-  return(cal_net)
+  return(list(cal_net = cal_net, costs = move_cost))
 }
 
 #.........................................................................
@@ -487,7 +487,7 @@ prey.fitness <- function(mass,
                          costs = NULL) 
 {
   #standardize mass input
-  # if (length(mass) == 1) mass <- rep(mass, n_prey)
+  if (length(mass) == 1) mass <- rep(mass, n_prey)
   
   #update weight
   cal_net[cal_net < 0] <- 0 #prevent negative
@@ -520,7 +520,7 @@ prey.fitness <- function(mass,
   #clamp minimum offspring to 0
   offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #clamp the minimum to 0
   
-  return(offspring)
+  return(list(offspring = offspring, mass_update = mass.update))
 }
 
 #----------------------------------------------------------------------
