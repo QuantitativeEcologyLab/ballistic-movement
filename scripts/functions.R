@@ -43,7 +43,8 @@ theme.qel <- function(legend = TRUE){
         panel.background = element_rect(fill = "transparent"))
   } else {
      theme <- theme + 
-       theme(legend.position = "none")
+       theme(legend.position = "none",
+             panel.grid = element_blank())
    }
 
   return(theme)
@@ -259,8 +260,7 @@ prey.mass <- function(mass, variance = FALSE) {
 # food raster function utilizing patches per 95% HR area (new)
 
 createFoodRaster <- function(mass, k, pred = FALSE, 
-                             calories = 0.015, 
-                             heterogeneity = FALSE) {
+                             calories = 0.015) {
   
   #var[position]
   if(pred){SIG <- pred.SIG(mass)} else{
@@ -301,6 +301,7 @@ createFoodRaster <- function(mass, k, pred = FALSE,
 makefood <- function(mass, width, pred = FALSE, 
                      calories = 0.015, # calories per unit area
                      heterogeneity = FALSE) {
+  # width = round(sqrt(prey.SIG(mass_prey))/10
   
   #var[position]
   if(pred){SIG <- pred.SIG(mass)} else{
@@ -456,7 +457,7 @@ prey.cals.net <- function(IDs, mass, speed, t){
   cal_net <- cal_gross - move_cost
   
   #return cal_net and cal_max
-  return(list(cal_net = cal_net, costs = move_cost))
+  return(cal_net)
 }
 
 #.........................................................................
@@ -486,7 +487,7 @@ prey.fitness <- function(mass,
                          costs = NULL) 
 {
   #standardize mass input
-  if (length(mass) == 1) mass <- rep(mass, n_prey)
+  # if (length(mass) == 1) mass <- rep(mass, n_prey)
   
   #update weight
   cal_net[cal_net < 0] <- 0 #prevent negative
@@ -519,7 +520,7 @@ prey.fitness <- function(mass,
   #clamp minimum offspring to 0
   offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #clamp the minimum to 0
   
-  return(list(offspring = offspring, mass_update = mass.update))
+  return(offspring)
 }
 
 #----------------------------------------------------------------------
