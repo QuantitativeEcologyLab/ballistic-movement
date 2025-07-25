@@ -29,24 +29,24 @@ Ncores <- 10
 # mass_pred <- 15000
 
 # Prey mass (g)
-mass_prey <- 50000
+mass_prey <- 30000
 
 #set sampling interval and lifespan
-t <- sampling(mass_prey, x = 1)
+t <- sampling(mass_prey, x = 40.5)
 
 #number of individuals in arena
 n_prey <- 10
 # n_pred <- 1
 
 #number of arenas
-REPS <- 1
+REPS <- 5
 
 #number of generations
 GENS <- 100
 
-#build food raster
-FOOD <- makefood(mass_prey, calories = 0.015, width = round(sqrt(prey.SIG(mass_prey))/10), heterogeneity = FALSE)
-#plot(FOOD)
+#updated food raster function
+FOOD <- createFoodRaster(mass_prey, k = 240000, calories = 1.1)
+plot(FOOD)
 
 #lists for storing results
 prey_res <- list()
@@ -76,8 +76,8 @@ for(G in 1:GENS) {
       
       PREY_mods <- list()
       for(i in 1:n_prey){
-        prey_tau_p <- prey.tau_p(mass_prey, variance = FALSE)
-        prey_tau_v <- prey.tau_v(mass_prey, variance = FALSE)
+        prey_tau_p <- prey.tau_p(mass_prey, variance = TRUE)
+        prey_tau_v <- prey.tau_v(mass_prey, variance = TRUE)
         prey_sig <- prey.SIG(mass_prey)
         prey_lv <- sqrt((prey_tau_v/prey_tau_p) * prey_sig)
         
@@ -257,7 +257,8 @@ for(G in 1:GENS) {
       prey_lvs[i] <- sqrt((prey_TAU_V[i]/prey_TAU_P[i])*prey_SIGMA[i])
     }
     
-    #summarise
+    #summarise  # save(prey_res, file = 'sim_results/july16/5000000g_longlife_prey_res.Rda')
+    # save(prey_details, file = 'sim_results/july16/5000000g_longlife_prey_details.Rda')
     prey[[R]] <- data.frame(generation = G,
                             tau_p = prey_TAU_P,
                             tau_v = prey_TAU_V,
@@ -356,15 +357,15 @@ for(G in 1:GENS) {
     if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
     warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
     
-    # save(prey_res, file = 'sim_results/sensitivity/increased_sampling/5000000g_heldtaup_prey_res.Rda')
-    # save(prey_details, file = 'sim_results/sensitivity/increased_sampling/5000000g_heldtaup_prey_details.Rda')  
+    # save(prey_res, file = 'sim_results/july16/5000000g_longlife_prey_res.Rda')
+    # save(prey_details, file = 'sim_results/july16/5000000g_longlife_prey_details.Rda')
     
     break
     }
   
   #save results
-  # save(prey_res, file = 'sim_results/sensitivity/increased_sampling/5000000g_heldtaup_prey_res.Rda')
-  # save(prey_details, file = 'sim_results/sensitivity/increased_sampling/5000000g_heldtaup_prey_details.Rda')    
+  # save(prey_res, file = 'sim_results/july16/5000000g_longlife_prey_res.Rda')
+  # save(prey_details, file = 'sim_results/july16/5000000g_longlife_prey_details.Rda')
   
   # save predator results
   # save(pred_res, file = 'sim_results/constant_resources_withpred/June23_15000gpredator_pred_res.Rda')

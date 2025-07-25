@@ -20,8 +20,8 @@ source("scripts/functions.R")
 #----------------------------------------------------------------------
 
 #load in your data
-# load('sim_results/constant_resources_nopred/100g_prey_res.Rda')
-# load('sim_results/constant_resources_nopred/100g_prey_details.Rda')
+load('sim_results/july16/5000000g_longlife_prey_res.Rda')
+load('sim_results/july16/5000000g_longlife_prey_details.Rda')
 
 # make data sets compatible with ggplot2
 prey_res_df <- do.call(rbind, prey_res)
@@ -237,54 +237,49 @@ taup.speed <- ggplot(prey_details_df, aes(y = speed, x = tau_p)) +
   theme_minimal()
 
 #create list of all plots
-plots <- list(rel.lv.gen,
-              taup.gen,
-              tauv.gen,
-              sig.gen,
-              lv.gen,
-              patches.gen,
-              cost.gen,
-              offspring.gen,
-              cal.gen,
-              mass.gen,
-              speed.gen,
-              patches.lv,
-              speed.lv,
-              patches.speed,
-              cal.lv,
-              speed.cal,
-              cost.speed,
-              offspring.speed,
-              offspring.lv,
-              cal.mass,
-              speed.mass,
-              cost.mass,
-              offspring.mass,
-              offspring.cal,
-              patches.off,
-              taup.speed)
+# plots <- list(rel.lv.gen,
+#               taup.gen,
+#               tauv.gen,
+#               sig.gen,
+#               lv.gen,
+#               patches.gen,
+#               cost.gen,
+#               offspring.gen,
+#               cal.gen,
+#               mass.gen,
+#               speed.gen,
+#               patches.lv,
+#               speed.lv,
+#               patches.speed,
+#               cal.lv,
+#               speed.cal,
+#               cost.speed,
+#               offspring.speed,
+#               offspring.lv,
+#               cal.mass,
+#               speed.mass,
+#               cost.mass,
+#               offspring.mass,
+#               offspring.cal,
+#               patches.off,
+#               taup.speed)
 
-#subset the list to limit computing power
-final.plot <- wrap_plots(plots[1:11], ncol = 3)
-#add plot title
-final <- final.plot + plot_annotation('Panel 1:')
-#print combined figure
-print(final)
-#ggsave(file = 'sim_results/sensitivity/increased_sampling/figures/5000000g_100th_panel1.png', plot = final, width = 15, height = 8, dpi = 800)
+#create panel 1
+p1 <- grid.arrange(rel.lv.gen, taup.gen, tauv.gen, sig.gen, patches.gen, speed.gen, cost.gen, offspring.gen, cal.gen, mass.gen, 
+                   ncol = 2, top = "30000g, new simulation setup")
+#ggsave(p1, file = "sim_results/july16/figures/30000g_panel1.png")
 
-#subset the list to limit computing power
-final.plot2 <- wrap_plots(plots[12:25], ncol = 5)
-#add plot title
-final2 <- final.plot2 + plot_annotation('Panel 2:')
-#print cobined figure
-print(final2)
-#ggsave(file = 'sim_results/sensitivity/increased_sampling/figures/5000000g_100th_panel2.png', plot = final2, width = 12, height = 8, dpi = 900, bg = "white")
+#create panel2 
+p2 <- grid.arrange(patches.lv, speed.lv, patches.speed, cal.lv, speed.cal, cost.speed, 
+                   cal.mass, speed.mass, cost.mass, taup.speed, offspring.lv, offspring.speed,
+                   offspring.mass, offspring.cal, patches.off, 
+                   ncol = 3, top = "5000000g, new simulation setup, 2300kcal per patch")
+#ggsave(p2, file = "sim_results/july16/figures/5000000g_panel2_v2.png")
 
 #reduced generation plots combined
 gen.plots <- grid.arrange(rel.lv.gen, taup.gen, tauv.gen, speed.gen, ncol = 2, nrow = 2)
 
-ggsave(gen.plots, file = 'sim_results/sensitivity/30000g_finalpanel1.PNG', 
-       width = 11, height = 5, units = "in")
+#ggsave(gen.plots, file = 'sim_results/sensitivity/30000g_finalpanel1.PNG', width = 11, height = 5, units = "in")
 
 other.plots <- grid.arrange(patches.lv, speed.lv, patches.speed, cal.lv, speed.cal, offspring.lv, ncol = 2, nrow = 3)
 
@@ -303,11 +298,23 @@ prey_list <- lapply(seq_along(PREY_tracks), function(i){
   colnames(df)[2:3] <- c("x", "y")
   return(df)
 })
-all_prey_df <- do.call(rbind, prey_list)
 
 #get x and y lines to show the patches in the raster
 xlines <- unique(df_raster$x)
 ylines <- unique(df_raster$y)
+
+circleFun <- function(center = c(0,0),diameter = 1, npoints = 100){
+  r = diameter / 2
+  tt <- seq(0,2*pi,length.out = npoints)
+  xx <- center[1] + r * cos(tt)
+  yy <- center[2] + r * sin(tt)
+  return(data.frame(x = xx, y = yy))
+}
+
+HR <- round(sqrt((-2*log(0.05)*pi)*prey.SIG(mass)))
+EXT <- round(sqrt((-2*log(0.0001)*pi)* prey.SIG(mass)))
+HR_area <- circleFun(diameter = 2*HR)
+EXT_area <- circleFun(diameter = 2*EXT)
 
 #plot it all together
 ggplot() +
@@ -315,11 +322,13 @@ ggplot() +
   geom_vline(xintercept = xlines, color = "white", alpha = 0.5) +
   geom_hline(yintercept = ylines, color = "white", alpha = 0.5) +
   scale_fill_viridis_c() +
-  geom_path(data = all_prey_df, aes(x = x, y = y), color = "black", linewidth = 0.7, alpha = 0.8) +
+  geom_path(data = PREY_tracks[[1]], aes(x = x, y = y), color = "black", linewidth = 0.7, alpha = 0.8) +
+  geom_path(dat = HR_area, aes(x,y), color = "#467378") +
+  geom_path(dat = EXT_area, aes(x,y), color = "#68855C") + 
   coord_equal() +
   theme_minimal() 
 
-#ggsave(file = 'figures/30000g_movepath.png', width = 8, height = 8, dpi = 900, bg = "white")
+ggsave(file = 'sim_results/july16/figures/30000g_1000thlifespan_movepath.png', width = 8, height = 8, dpi = 900, bg = "white")
 
 #........................................................................
 # reduced diagnostics ----

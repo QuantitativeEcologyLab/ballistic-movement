@@ -260,7 +260,8 @@ prey.mass <- function(mass, variance = FALSE) {
 # food raster function utilizing patches per 95% HR area (new)
 
 createFoodRaster <- function(mass, k, pred = FALSE, 
-                             calories = 0.015) {
+                             calories = 0.015,
+                             heterogeneity = FALSE) {
   
   #var[position]
   if(pred){SIG <- pred.SIG(mass)} else{
@@ -286,9 +287,15 @@ createFoodRaster <- function(mass, k, pred = FALSE,
   food_raster <- rast(ncol = N, nrow = N,
                       xmin = -EXT, xmax = EXT,
                       ymin = -EXT, ymax = EXT)
+  var <- 2
+  sigma2 <- calories * var # creates sigma value, increase var to increase the variance
   
-  #assign caloric values to cells
-  values(food_raster) <- calories # calories is defined as calories per patch
+  #assign caloric values to raster
+  if (heterogeneity) {
+    values(food_raster) <- rgamma2(mu = calories, sigma2 = sigma2, N = ncell(food_raster))
+  } else {
+    values(food_raster) <- calories
+  }
   
   #return calorie raster
   return(food_raster)
@@ -430,14 +437,14 @@ prey.cals.net <- function(IDs, mass, speed, t){
   patch_values <- attr(IDs, "patch_values")
   cal_gross <- sum(patch_values, na.rm = TRUE)
   
-  #metabolic rate (kj/day) from Nagy 1987 https://doi.org/10.2307/1942620
+  # #metabolic rate (kj/day) from Nagy 1987 https://doi.org/10.2307/1942620
   # BMR <- 0.774 + 0.727 * log10(mass)
   # #back transform
   # BMR <- 10^BMR
-  # #convert to cal/s
-  # BMR <- (BMR * 239.005736) / 86400
-  
-  #calculate total BMR cost over sample period 
+  # #convert to kcal/s
+  # BMR <- (BMR * 0.239005736) / 86400
+  # 
+  # #calculate total BMR cost over sample period 
   # BMR_cost <- BMR * time_total
   
   #calculate movement cost (watts/kg) from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1
@@ -447,11 +454,11 @@ prey.cals.net <- function(IDs, mass, speed, t){
   E <- E * 0.239005736
   
   #calculate total movement costs
-  #cal/s to cal 
+  #kcal/s to kcal 
   move_cost <- E * time_total
   
   #calculate total energetic costs
-  # cost_total <- BMR_cost * 0.2 + move_cost
+  # cost_total <- BMR_cost + move_cost
   
   #assign net calories
   cal_net <- cal_gross - move_cost
