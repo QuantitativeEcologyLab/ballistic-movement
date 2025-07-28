@@ -270,27 +270,31 @@ createFoodRaster <- function(mass, k, pred = FALSE,
   #range of raster based on 99.9% HR area
   EXT <- round(sqrt((-2*log(0.0001)*pi)* SIG))
   
-  # 95% HR radius
+  #95% HR radius
   HR <- round(sqrt((-2*log(0.05)*pi)*SIG))
 
-  # 95% HR area
+  #95% HR area
   HR_area <- pi * HR^2
-  # area of each patch based on set number of patches in 95% HR
+  #area of each patch based on set number of patches in 95% HR
   patch_area <- HR_area / k #where k is the number of patches in the 95% HR
-  # back calculate the width of each patch
+  #back calculate the width of each patch
   width <- sqrt(patch_area)
   
-  # assign number of cells based on EXT and width
+  #assign number of cells based on EXT and width
   N <- ceiling(2 * EXT / width)
   
   #create raster with terra
   food_raster <- rast(ncol = N, nrow = N,
                       xmin = -EXT, xmax = EXT,
                       ymin = -EXT, ymax = EXT)
-  var <- 2
+  
+  #create variance as a function of the number of calories
+  #this helps keep is more consistent across the calorie spectrum (and thus the mass spectrum)
+  var <- 10
   sigma2 <- calories * var # creates sigma value, increase var to increase the variance
   
   #assign caloric values to raster
+  #heterogeneous landscapes created with a gamma distribution based on the mean and variance
   if (heterogeneity) {
     values(food_raster) <- rgamma2(mu = calories, sigma2 = sigma2, N = ncell(food_raster))
   } else {
@@ -303,7 +307,7 @@ createFoodRaster <- function(mass, k, pred = FALSE,
 
 #..............................................................................
 # old food raster function, using patch width scaled to prey.SIG
-# use for seed2STEM heterogeneity investigation
+# stored for legacy purposes
 
 makefood <- function(mass, width, pred = FALSE, 
                      calories = 0.015, # calories per unit area
@@ -402,7 +406,7 @@ get.speed <- function(models){
 
 #sampling function with lifespan scaled to body mass
 
-sampling <- function(mass, x = 1) {
+sampling <- function(mass, x = 40.5) {
   
   #calculate lifespan in seconds from de Magalhaes et al (2008) https://doi.org/10.1093/gerona/62.2.149
   lifespan <- (4.88*mass^0.153) * 31536000 # years to seconds
@@ -438,14 +442,14 @@ prey.cals.net <- function(IDs, mass, speed, t){
   cal_gross <- sum(patch_values, na.rm = TRUE)
   
   # #metabolic rate (kj/day) from Nagy 1987 https://doi.org/10.2307/1942620
-  # BMR <- 0.774 + 0.727 * log10(mass)
-  # #back transform
-  # BMR <- 10^BMR
-  # #convert to kcal/s
-  # BMR <- (BMR * 0.239005736) / 86400
-  # 
-  # #calculate total BMR cost over sample period 
-  # BMR_cost <- BMR * time_total
+  BMR <- 0.774 + 0.727 * log10(mass)
+  #back transform
+  BMR <- 10^BMR
+  #convert to kcal/s
+  BMR <- (BMR * 0.239005736) / 86400
+
+  #calculate total BMR cost over sample period
+  BMR_cost <- BMR * time_total
   
   #calculate movement cost (watts/kg) from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1
   E <- 10.7 * (mass / 1000)^(-0.316) * speed + 6.03 * (mass / 1000)^(-0.303)  #convert to kJ/s
@@ -455,16 +459,16 @@ prey.cals.net <- function(IDs, mass, speed, t){
   
   #calculate total movement costs
   #kcal/s to kcal 
-  move_cost <- E * time_total
+  cost_move <- E * time_total
   
   #calculate total energetic costs
-  # cost_total <- BMR_cost + move_cost
+  cost_total <- BMR_cost + cost_move
   
   #assign net calories
-  cal_net <- cal_gross - move_cost
+  cal_net <- cal_gross - cost_total
   
   #return cal_net and cal_max
-  return(list(cal_net = cal_net, costs = move_cost))
+  return(list(cal_net = cal_net, costs = cost_total))
 }
 
 #.........................................................................
