@@ -259,9 +259,11 @@ prey.mass <- function(mass, variance = FALSE) {
 
 # food raster function utilizing patches per 95% HR area (new)
 
-createFoodRaster <- function(mass, k, pred = FALSE, 
-                             calories = 0.015,
-                             heterogeneity = FALSE) {
+createFoodRaster <- function(mass, 
+                             k = 240000, # number of patches in the 95% HR area
+                             pred = FALSE, 
+                             calories = 1,
+                             var = 0) {
   
   #var[position]
   if(pred){SIG <- pred.SIG(mass)} else{
@@ -288,17 +290,15 @@ createFoodRaster <- function(mass, k, pred = FALSE,
                       xmin = -EXT, xmax = EXT,
                       ymin = -EXT, ymax = EXT)
   
-  #create variance as a function of the number of calories
-  #this helps keep is more consistent across the calorie spectrum (and thus the mass spectrum)
-  var <- 10
-  sigma2 <- calories * var # creates sigma value, increase var to increase the variance
-  
   #assign caloric values to raster
   #heterogeneous landscapes created with a gamma distribution based on the mean and variance
-  if (heterogeneity) {
-    values(food_raster) <- rgamma2(mu = calories, sigma2 = sigma2, N = ncell(food_raster))
+  if (var == 0) {
+    values(food_raster) <- calories 
   } else {
-    values(food_raster) <- calories
+    #create variance as a function of the number of calories
+    #this helps keep is more consistent across the calorie spectrum (and thus the mass spectrum)
+    sigma2 <- calories * var # creates sigma value, increase var to increase the variance
+    values(food_raster) <- rgamma2(mu = calories, sigma2 = sigma2, N = ncell(food_raster))
   }
   
   #return calorie raster

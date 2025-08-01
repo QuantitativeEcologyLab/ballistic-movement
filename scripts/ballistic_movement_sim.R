@@ -34,11 +34,8 @@ Ncores <- 20
 # masses to test first
 # 500, 21500, 42500, 63500, 84500, 105500 126500 147500 168500 189500 200000
 
-# predator mass 
-# mass_pred <- 15000
-
 # Prey mass (g)
-mass_prey <- 200000
+mass_prey <- 84500
 
 #set sampling interval and lifespan
 t <- sampling(mass_prey, x = 40.5)
@@ -53,7 +50,7 @@ REPS <- 10
 GENS <- 1000
 
 #updated food raster function
-FOOD <- createFoodRaster(mass_prey, k = 240000, calories = 30)
+FOOD <- createFoodRaster(mass_prey, k = 240000, calories = 8)
 
 #lists for storing results
 prey_res <- list()
@@ -238,15 +235,15 @@ for(G in 1:GENS) {
     if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
     warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
     
-    save(prey_res, file = 'prey_results/200000g_prey_res.Rda')
-    save(prey_details, file = 'prey_results/200000g_prey_details.Rda')
+    save(prey_res, file = 'prey_results/84500g_prey_res.Rda')
+    save(prey_details, file = 'prey_results/84500g_prey_details.Rda')
     
     break
     }
   
   #save results
-  save(prey_res, file = 'prey_results/200000g_prey_res.Rda')
-  save(prey_details, file = 'prey_results/200000g_prey_details.Rda')
+  save(prey_res, file = 'prey_results/84500g_prey_res.Rda')
+  save(prey_details, file = 'prey_results/84500g_prey_details.Rda')
   
   toc(log = TRUE)
 }
