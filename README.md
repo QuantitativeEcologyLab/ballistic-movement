@@ -1,4 +1,4 @@
-# Folder: ballistic-movement
+# ballistic-movement
 
 ## Purpose:
 
