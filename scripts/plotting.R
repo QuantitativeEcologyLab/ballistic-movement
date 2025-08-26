@@ -9,6 +9,9 @@ library(dplyr)
 library(gridExtra)
 library(patchwork)
 library(purrr)
+library(minpack.lm)
+library(mgcv) # for gam model
+library(scico)
 
 # Source the functions (ensure 'functions.R' is available in the working directory)
 source("scripts/functions.R")
@@ -18,8 +21,8 @@ source("scripts/functions.R")
 #----------------------------------------------------------------------
 
 #load in your data
-load('prey_results/189500g_prey_res.Rda')
-load('prey_results/189500g_prey_details.Rda')
+load('simulations/prey_results/21500g_prey_res.Rda')
+load('simulations/prey_results/21500g_prey_details.Rda')
 
 prey_res_df <- do.call(rbind, prey_res)
 prey_details_df <- do.call(rbind, prey_details)
@@ -34,73 +37,150 @@ prey_summary <- prey_details_df %>%
   group_by(generation) %>%
   summarise(across(where(is.numeric), ~mean(.x, na.rm = TRUE)), .groups = "drop")
 
-prey_details_df <- prey_details_df %>% 
-  group_by(generation) %>% 
-  mutate(lv_mean = mean(lv))
+#use palette "berlin" for small body sizes, "lipari" for large body sizes
 
-lastgens <- prey_details_df %>% 
-  filter(generation >= max(generation) - 199)
-
-p1 <-
-  ggplot(prey_res_df, aes(x = generation, y = rel.lv)) +
-  geom_line(color = "#4278aaff", linewidth = 0.5) +
-  geom_hline(yintercept = 1, color = 'grey30', linetype = "dashed") +
-  geom_ribbon(aes(ymin = rel.lv - rel_sd,
-                  ymax = rel.lv + rel_sd),
-              fill = "#4278aaff", alpha = 0.3) +
-  labs(y = "Relative change in ballistic lengthscale (m)",x = "Generation") +
+#105500 grams
+#p1 <-
+  ggplot() +
+  ggtitle("A") +
+  geom_point(dat = prey_details_df, aes(x = generation, y = lv), col = "grey70", alpha = 0.8, size = 0.1) +
+  geom_line(dat = prey_summary, aes(x = generation, y = lv), col = "#000", linewidth = 0.5) +
+  labs(y = expression(bold(l[v])), x = "Generation") +
   theme.qel()
 
-p2 <-
+ggsave(p1, width = 10, height = 5, units = "in", dpi = 900, file = "figures/maintext/105kg_lv_gen.png")
+
+#p2 <-
+  ggplot(prey_details_df, aes(x = lv, y = cal_net, color = generation)) +
+  ggtitle("B") +
+  geom_point(size = 0.5) +
+  scale_colour_scico(palette = 'lipari') +
+  labs(y = "Net calories", x = "Ballistic lengthscale (m)") +
+  theme.qel()
+
+#p3 <- 
+  ggplot(prey_details_df, aes(x = lv, y = speed, color = generation)) +
+  ggtitle("C") +
+  geom_point(size = 0.5) +
+  scale_colour_scico(palette = "lipari") +
+  labs(x = "Ballistic lengthscale (m)", y = "Speed (m/s)") +
+  theme.qel()
+
+#200000 grams
+p4 <-
   ggplot() +
-  geom_point(dat = prey_details_df, aes(x = generation, y = lv), col = "grey70", alpha = 0.8, size = 0.1) +
-  geom_line(dat = prey_details_df, aes(x = generation, y = lv_mean), col = "#4278aaff", linewidth = 0.5) +
+  ggtitle("A") +
+  geom_point(dat = prey_details_df, aes(x = generation, y = lv), col = "#c7c9d1", alpha = 0.1, size = 0.1) +
+  geom_line(dat = prey_summary, aes(x = generation, y = lv), col = "#24262d", linewidth = 0.5) +
+  labs(y = expression(bold(l[v])), x = "Generation") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.title.y = element_text(size=9, family = "sans", face = "bold"),
+        axis.title.x = element_text(size=9, family = "sans", face = "bold"),
+        axis.text.y = element_text(size=8, family = "sans"),
+        axis.text.x  = element_text(size=8, family = "sans"),
+        plot.title = element_text(hjust = -0.05, size = 12, family = "sans", face = "bold"),
+        plot.background = element_rect(fill = "transparent", color = NA),
+        plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm")) +
+  theme(
+    legend.position = "none",
+    panel.grid = element_blank())
+
+p5 <-
+  ggplot(prey_details_df, aes(x = lv, y = cal_net, color = generation)) +
+  ggtitle("B") +
+  geom_point(size = 0.5) +
+  scale_colour_scico(palette = 'lipari') +
+  labs(x = expression(bold(l[v])), y = "Net calories") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.title.y = element_text(size=9, family = "sans", face = "bold"),
+        axis.title.x = element_text(size=9, family = "sans", face = "bold"),
+        axis.text.y = element_text(size=8, family = "sans"),
+        axis.text.x  = element_text(size=8, family = "sans"),
+        plot.title = element_text(hjust = -0.05, size = 12, family = "sans", face = "bold"),
+        plot.background = element_rect(fill = "transparent", color = NA),
+        plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm")) +
+  theme(
+        legend.text = element_text(size = 6, family = "sans"),
+        legend.title = element_text(size = 6, family = "sans", face = "bold"),
+        legend.key.size = unit(0.3, "cm"),
+        legend.spacing.y = unit(0.01, "cm"),
+        legend.margin = margin(0,0,0,0),
+        legend.background = element_rect(fill = "transparent", color = NA),
+        legend.key = element_rect(fill = "transparent", color = NA),
+        panel.background = element_rect(fill = "transparent")) +
+  theme(legend.position = c(0.85, 0.15)) 
+
+p6 <- 
+  ggplot(prey_details_df, aes(x = lv, y = speed, color = generation)) +
+  ggtitle("C") +
+  geom_point(size = 0.5) +
+  scale_colour_scico(palette = "lipari") +
+  labs(x = expression(bold(l[v])), y = "Speed (m/s)") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.title.y = element_text(size=9, family = "sans", face = "bold"),
+        axis.title.x = element_text(size=9, family = "sans", face = "bold"),
+        axis.text.y = element_text(size=8, family = "sans"),
+        axis.text.x  = element_text(size=8, family = "sans"),
+        plot.title = element_text(hjust = -0.05, size = 12, family = "sans", face = "bold"),
+        plot.background = element_rect(fill = "transparent", color = NA),
+        plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm")) +
+  theme(
+    legend.text = element_text(size = 6, family = "sans"),
+    legend.title = element_text(size = 6, family = "sans", face = "bold"),
+    legend.key.size = unit(0.3, "cm"),
+    legend.spacing.y = unit(0.01, "cm"),
+    legend.margin = margin(0,0,0,0),
+    legend.background = element_rect(fill = "transparent", color = NA),
+    legend.key = element_rect(fill = "transparent", color = NA),
+    panel.background = element_rect(fill = "transparent")) +
+  theme(legend.position = c(0.85, 0.85))
+
+FIG2 <- grid.arrange(p4, p5, p6, ncol = 3)
+
+ggsave(FIG2, width = 12, height = 4, units = "in", dpi = 900, bg = "white", file="figures/maintext/200kg_poster.png")
+
+# restrict to final generations
+
+lastgens <- prey_details_df %>%
+  filter(generation >= max(generation) - 199) %>% 
+  group_by(generation) %>% 
+  mutate(mean_lv = mean(lv))
+
+p4 <-
+  ggplot() +
+  ggtitle("D") +
+  geom_point(dat = lastgens, aes(x = generation, y = lv), col = "grey70", alpha = 0.8, size = 0.1) +
+  geom_line(dat = lastgens, aes(x = generation, y = mean_lv), col = "#000", linewidth = 0.5) +
   labs(y = "Ballistic lengthscale (m)", x = "Generation") +
   theme.qel()
 
-p3 <-
+p5 <-
   ggplot(lastgens, aes(x = lv, y = patches)) +
-  geom_point(color = "#4278aaff") +
+  ggtitle("E") +
+  geom_point(color = "#000") +
   labs(y = "Patches visited", x = "Ballistic lengthscale (m)") +
   theme.qel()
-print(p3)
 
-p4 <- prey_details_df %>%
-  filter(generation >= max(generation) - 199) %>% 
-  ggplot(aes(x = lv, y = speed)) +
-  geom_point(color = "#4278aaff") +
-  labs(y = "Speed (m/s)", x = "Ballistic lengthscale (m)") +
-  theme.qel()
-print(p4)
-
-p5 <- prey_details_df %>% 
-  filter(generation >= max(generation) - 20) %>% 
-  ggplot(aes(x = lv, y = offspring)) +
-  geom_point(color = "#4278aaff") +
-  theme.qel()
-print(p5)
-
-p6 <-
-  ggplot(prey_details_df, aes(x = speed, y = offspring)) +
-  geom_point(color = "#4278aaff") +
+p6 <- 
+  ggplot(lastgens, aes(x = speed, y = lv)) +
+  ggtitle("F") +
+  geom_point(color = "#000") +
+  labs(y = "Ballistic lengthscale (m)", x = "Speed (m/s)") +
   theme.qel()
 
-FIG <- grid.arrange(p1, p2, p3, p4, p5, p6)
+FIG2 <- grid.arrange(p4, p5, p6, nrow = 1, ncol = 3)
 
-#ggsave(FIG, width = 6.86, height = 7.36, units = "in", dpi = 600, bg = "white", file="prey_results/figures/189500g_results_test.png")
+FIG.final <- grid.arrange(FIG, FIG2, ncol = 1, nrow = 2)
 
-binned_lv <- prey_details_df %>% 
-  mutate(lv_bin = floor(lv/0.5)*0.5) %>% 
-  group_by(lv_bin) %>% 
-  mutate(mean_patch = mean(patches), .groups = "drop") %>% 
-  ggplot(aes(x = lv, y = mean_patch)) +
-  geom_point(color = "#4278aaff") +
-  labs(y = "Offspring", x = "Ballistic lengthscale (m)") +
-  theme.qel()
-print(binned_lv)
-
-
-## analysis across mass spectrum
+# ------------------------------------------------------------------------------
+## analysis across mass spectrum ----
+# ------------------------------------------------------------------------------
 load.prey.details <- function(file_path) {
   #load the .Rda file into a new environment to avoid cluttering global environment
   env <- new.env() 
@@ -117,7 +197,7 @@ load.prey.details <- function(file_path) {
   return(df)
 }
 
-files <- list.files(path = "~/hdrive/GitHub/ballistic-movement/prey_results", pattern = "^[0-9]+g_prey_details\\.Rda$", full.names = TRUE)
+files <- list.files(path = "~/hdrive/GitHub/ballistic-movement/simulations/prey_results", pattern = "^[0-9]+g_prey_details\\.Rda$", full.names = TRUE)
 
 all_prey_details <- map_dfr(files, load.prey.details)
 
@@ -129,11 +209,49 @@ summary <- all_prey_details %>%
                 n = n(),
                 se_lv = sd_lv / sqrt(n))
 
-ggplot() +
-  geom_point(data = summary, aes(x = mass, y = mean_lv, size = se_lv)) +
-  scale_size_continuous(range = c(2, 8)) +
-  labs(x = "Prey body mass (g)", y = "Ballistic lengthscale (m)", title = "Mean ballistic lengthscale (m) in final 100 generations by body mass") +
-  theme.qel()
+# summary500g <- prey_details_df %>% 
+#   filter(generation > max(generation - 100)) %>% 
+#   group_by(mass) %>% 
+#   summarise(mean_lv = mean(lv, na.rm = TRUE),
+#             sd_lv = sd(lv, na.rm = TRUE),
+#             n = n(),
+#             se_lv = sd_lv / sqrt(n))
+# 
+# summary_comb <- bind_rows(summary, summary500g)
 
-ggsave(file = "prey_results/figures/mean_lv_by_mass.png", width = 6.86, height = 3.5, units = "in",
+
+FIT_linear_log <- gam(log10(mean_lv) ~ log10(mass), family = tw(), data = summary) 
+
+FIT_log <- gam(log10(mean_lv) ~ s(log10(mass), k = 3), family = tw(), data = summary) #lowest AIC
+
+FIT_linear <- gam((mean_lv) ~ (mass), family = tw(), data = summary) 
+
+FIT <- gam((mean_lv) ~ s((mass), k = 3), family = tw(), data = summary)
+
+AIC(FIT, FIT_linear, FIT_log, FIT_linear_log)
+summary(FIT_log)
+
+ggplot(data = summary, aes(x = mass/1000, y = mean_lv)) +
+  geom_smooth(method = gam, formula = y ~ s(log10(x), k = 4), method.args = list(family = "tw"), color = "#5b557bff") +
+  geom_point(aes(size = se_lv), alpha = 1, color = "grey20") +
+  scale_size_continuous(range = c(2, 8)) +
+  labs(x = "Prey body mass (kg)", y = expression(bold(l[v]))) +
+  coord_cartesian(ylim = c(-5,250)) +
+  scale_y_continuous(expand = c(0,0)) +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.title.y = element_text(size=9, family = "sans", face = "bold"),
+        axis.title.x = element_text(size=9, family = "sans", face = "bold"),
+        axis.text.y = element_text(size=8, family = "sans"),
+        axis.text.x  = element_text(size=8, family = "sans"),
+        plot.title = element_text(hjust = -0.05, size = 12, family = "sans", face = "bold"),
+        plot.background = element_rect(fill = "transparent", color = NA),
+        panel.background = element_rect(fill = "transparent", color = NA),
+        plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm")) +
+  theme(legend.position = "none",
+        panel.grid = element_blank())
+
+
+ggsave(file = "figures/maintext/massspectrum_model.png", width = 6.86, height = 3, units = "in",
        dpi = 600)

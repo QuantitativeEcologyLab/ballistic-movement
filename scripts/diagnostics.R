@@ -17,8 +17,8 @@ source("scripts/functions.R")
 #----------------------------------------------------------------------
 
 #load in your data
-load('prey_results/105500g_prey_res.Rda')
-load('prey_results/105500g_prey_details.Rda')
+load('simulations/prey_results/500g_prey_res.Rda')
+load('simulations/prey_results/500g_prey_details.Rda')
 
 # make data sets compatible with ggplot2
 prey_res_df <- do.call(rbind, prey_res)
@@ -45,7 +45,7 @@ rel.lv.gen <- ggplot(prey_res_df, aes(x = generation, y = rel.lv)) +
   geom_ribbon(aes(ymin = rel.lv - rel_sd,
                   ymax = rel.lv + rel_sd),
               fill = "deeppink4", alpha = 0.3) +
-  labs(y = "relative change in lv",x = "generation") +
+  labs(y = "relative change in lv", x = "generation") +
   theme_minimal()
 # print(rel.lv.gen)
 
@@ -235,15 +235,15 @@ taup.speed <- ggplot(prey_details_df, aes(y = speed, x = tau_p)) +
 
 #create panel 1: figures of traits over generation time
 p1 <- grid.arrange(rel.lv.gen, taup.gen, tauv.gen, sig.gen, patches.gen, speed.gen, cost.gen, offspring.gen, cal.gen, mass.gen, 
-                   ncol = 2, top = "105500 grams")
-ggsave(p1, file = "prey_results/figures/overview/105500g_panel1.png")
+                   ncol = 2, top = "179000 grams")
+#ggsave(p1, file = "prey_results/figures/overview/179000g_panel1.png")
 
 #create panel 2: figure comparing traits to one another
 p2 <- grid.arrange(patches.lv, speed.lv, patches.speed, cal.lv, speed.cal, cost.speed, 
                    cal.mass, speed.mass, cost.mass, taup.speed, offspring.lv, offspring.speed,
                    offspring.mass, offspring.cal, patches.off, 
-                   ncol = 3, top = "105500 grams")
-ggsave(p2, file = "prey_results/figures/overview/105500g_panel2.png")
+                   ncol = 3, top = "179000 grams")
+#ggsave(p2, file = "prey_results/figures/overview/179000g_panel2.png")
 
 #plot raster with track
 #create data frame from food raster
@@ -398,3 +398,87 @@ taup.sig2 <- ggplot(prey_details_df, aes(x = generation, y = (tau_p/sig))) +
   ylim(0, 0.2) +
   theme.qel()
 print(taup.sig2)
+
+#-------------------------------------------------------------------------------
+# project updates ----
+#-------------------------------------------------------------------------------
+
+#load in your data
+load('simulations/prey_results/63500g_prey_res.Rda')
+load('simulations/prey_results/63500g_prey_details.Rda')
+
+# make data sets compatible with ggplot2
+prey_res_df <- do.call(rbind, prey_res)
+prey_details_df <- do.call(rbind, prey_details)
+
+# relative change in lv ~ gen
+PREY_LV <- prey_res_df$lv[1]
+prey_res_df$rel.lv <- prey_res_df$lv/PREY_LV
+prey_res_df$rel_var <- prey_res_df$var / (PREY_LV^2)
+prey_res_df$rel_sd <- sqrt(prey_res_df$rel_var)
+
+prey_summary <- prey_details_df %>%
+  group_by(generation) %>%
+  summarise(across(where(is.numeric), ~mean(.x, na.rm = TRUE)), .groups = "drop")
+
+p1 <- 
+  ggplot(prey_res_df, aes(x = generation, y = rel.lv)) +
+  geom_line() +
+  geom_hline(yintercept = 1, color = 'grey30', linetype = "dashed") +
+  geom_ribbon(aes(ymin = rel.lv - rel_sd,
+                  ymax = rel.lv + rel_sd),
+              alpha = 0.3) +
+  labs(y = "Relative Change in lv", x = "Generation") +
+  theme.qel()
+
+p2 <- 
+  ggplot(prey_summary, aes(x = generation, y = tau_v)) +
+  geom_line() +
+  labs(x = "Generation", y = expression(bold(tau[v]))) +
+  theme.qel()
+
+p3 <- 
+  ggplot(prey_summary, aes(x = generation, y = tau_p)) +
+  geom_line() +
+  labs(x = "Generation", y = expression(bold(tau[p]))) +
+  theme.qel()
+
+p4 <- 
+  ggplot(prey_summary, aes(x = generation, y = sig)) +
+  geom_line() +
+  labs(x = "Generation", y = expression(bold(sigma))) +
+  theme.qel()
+
+FIG1 <- grid.arrange(p1, p2, p3, p4, ncol = 2, nrow = 2)
+
+p5 <- 
+  ggplot(prey_details_df, aes(x = lv, y = cal_net, color = generation)) +
+  geom_point(size = 0.2) +
+  labs(x = expression(bold(l[v])), y = "Net calories") +
+  theme.qel()
+
+p6 <-
+  ggplot(prey_details_df, aes(x = speed, y = cal_net, color = generation)) +
+  geom_point(size = 0.2) +
+  labs(x = "Speed (m/s)", y = "Net calories") +
+  theme.qel()
+
+p7 <- 
+  ggplot(prey_details_df, aes(x = lv, y = speed, color = generation)) +
+  geom_point(size = 0.2) +
+  labs(x = expression(bold(l[v])), y = "Speed (m/s)") +
+  theme.qel()
+
+p8 <- 
+  ggplot(prey_details_df, aes(x = lv, y = offspring, color = generation)) +
+  geom_point(size = 0.2) +
+  labs(x = expression(bold(l[v])), y = "Offspring") +
+  theme.qel()
+
+FIG2 <- grid.arrange(p5, p6, p7, p8, ncol = 2, nrow = 2)
+
+# save figures 
+
+ggsave(FIG1, file = "project_updates/july/63500g_genplots.png", width = 6, height = 5, units = "in", dpi = 600)
+
+ggsave(FIG2, file = "project_updates/july/63500g_variableplots.png", width = 6, height = 5, units = "in", dpi = 600)

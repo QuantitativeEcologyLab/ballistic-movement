@@ -18,6 +18,9 @@ library(terra) #for creating the food raster
 # create figure theme----
 #----------------------------------------------------------------------
 
+#theme is designed for saving with ggsave() with the following specs
+# width = 6.86, height = 3.5, units = "in", dpi = 600
+
 theme.qel <- function(legend = TRUE){
   theme <- theme_bw() +
     theme(panel.grid.major = element_blank(),
@@ -71,6 +74,25 @@ rgamma2 <- function(mu, sigma2, N = n()) {
   rgamma(n = N,
          shape = mu^2 / sigma2, # (k * theta)^2 / (k * theta^2)
          scale = sigma2 / mu) # (k * theta^2) / (k * theta)
+}
+
+#----------------------------------------------------------------------
+# Generate prey centres ---- 
+#----------------------------------------------------------------------
+
+get.centres <- function(mass, n_prey){
+  centres_list <- lapply(1:n_prey, function(i) {
+  #calculate the 80% home range
+  HR <- round(sqrt((-2*log(0.20)*pi)*prey.SIG(mass)))
+  
+  #generate x and y coordinates within the 80% HR area (square not)
+  centres_x <- runif(1, -HR, HR)
+  centres_y <- runif(1, -HR, HR)
+  
+  df <- data.frame(x = centres_x,
+                   y = centres_y)
+  })
+  return(centres_list)
 }
 
 #----------------------------------------------------------------------
@@ -449,7 +471,7 @@ prey.cals.net <- function(IDs, mass, speed, t){
   BMR <- (BMR * 0.239005736) / 86400
 
   #calculate total BMR cost over sample period
-  BMR_cost <- BMR * time_total
+  cost_BMR <- BMR * time_total
   
   #calculate movement cost (watts/kg) from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1
   E <- 10.7 * (mass / 1000)^(-0.316) * speed + 6.03 * (mass / 1000)^(-0.303)  #convert to kJ/s
@@ -462,7 +484,7 @@ prey.cals.net <- function(IDs, mass, speed, t){
   cost_move <- E * time_total
   
   #calculate total energetic costs
-  cost_total <- BMR_cost + cost_move
+  cost_total <- cost_BMR + cost_move
   
   #assign net calories
   cal_net <- cal_gross - cost_total
@@ -513,7 +535,7 @@ prey.fitness <- function(mass,
   
   #birth weight via allometric scaling in mammals from Blueweiss et al. 1978 https://doi.org/10.1007/BF00344996
   #wet weight $\approx$ 0.75 total weight
-  ##therefore dry mass $\approx$ 0.25 from Fusch et al. 1999 https://doi.org/10.1203/00006450-199910000-00018
+  ##therefore dry mass $\approx$ 0.25 from Young et al. 2021 https://doi.org/10.1136/archdischild-2020-321112
   W_B0 <- 0.25*(0.097*mass.update^(0.92))
   
   #total offspring based on updated mass
@@ -556,16 +578,18 @@ encounter <- function(prey.tracks, pred.tracks, range = 50){
 # Predator calorie intake
 #----------------------------------------------------------------------
 
-pred_cals_net <- function(encounters, mass, t, speed){
+pred.cals.net <- function(encounters, mass, t, speed){
   
   time_total <- attr(t, "time_total")
   
   # metabolic rate (kj/day) from Nagy 1987 https://doi.org/10.2307/1942620
-  # BMR <- 0.774 + 0.727 * log10(mass)
-  # #back transform
-  # BMR <- 10^BMR
-  # #convert to cal/s
-  # BMR <- (BMR * 239.005736) / 86400
+  BMR <- 0.774 + 0.727 * log10(mass)
+  #back transform
+  BMR <- 10^BMR
+  #convert to cal/s
+  BMR <- (BMR * 0.239005736) / 86400
+  #total BMR cost
+  cost_BMR <- BMR * time_total
   
   #calculate movement cost (watts/kg) from Taylor et al. 1982 https://doi.org/10.1242/jeb.97.1.1
   E <- 10.7 * (mass / 1000)^(-0.316) * (speed) + 6.03 * (mass / 1000)^(-0.303)
@@ -574,22 +598,18 @@ pred_cals_net <- function(encounters, mass, t, speed){
   #convert to cal/s
   E <- E * 0.239005736
   
-  # # Maximum running speed in km/hr from Hirt et al. 2017 https://doi.org/10.1038/s41559-017-0241-4
-  # v_max <- 25.5 * (mass/1000)^(0.26) * (1 - exp(-22*(mass/1000)^(-0.66)))
-  # 
-  # #Convert to m/s
-  # v_max <- v_max/3.6
-  
   #Total energetic cost in kj as a function of BMR and movement speed
-  move_cost <- E * time_total
+  cost_move <- E * time_total
+  
+  cost_total <- cost_move + cost_BMR
   
   #Energy intake in cal based on Gorecki 1965 http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.915.5227&rep=rep1&type=pdf
-  mass_prey <- prey.mass(mass)
-  intake <- 1500 * mass_prey * sum(encounters)
+  prey_mass <- prey.mass(mass)
+  intake <- 100 * prey_mass * sum(encounters[[i]])
   
-  pred_cal_net <- intake - move_cost
+  cal_net <- intake - cost_total
   
-  return(list(cal_net = pred_cal_net, costs = move_cost))
+  return(cal_net)
 }
 
 #----------------------------------------------------------------------
@@ -628,6 +648,8 @@ pred.fitness <- function(mass,
   #clamp minimum offspring to 0
   offspring <- ctmm:::clamp(offspring, min = 0, max = Inf) #clamp the minimum to 0
   
-  return(list(offspring = offspring, mass_update = mass.update))
+  return(offspring)
 }
+
+
 

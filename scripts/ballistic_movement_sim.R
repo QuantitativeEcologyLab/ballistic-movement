@@ -31,8 +31,8 @@ Ncores <- 20
 # masses to test
 #  500  11000  21500  32000  42500  53000  63500  74000  84500  95000 105500 116000 126500 137000 147500 158000 168500 179000 189500 200000
 
-# masses to test first
-# 500, 21500, 42500, 63500, 84500, 105500 126500 147500 168500 189500 200000
+# masses left to test
+# 11000, 32000
 
 # Prey mass (g)
 mass_prey <- 84500
@@ -67,6 +67,7 @@ for(G in 1:GENS) {
     
     # generate movement models
     # if the first generation, generate movement parameters from mass
+    #use runif distribution, clamped within a section of the ext for when you add predators to the system
     if (G == 1) {
       CENTRES <- rbvpois(n = n_prey,
                          a = prey.SIG(mass_prey)*0.75,
@@ -235,15 +236,15 @@ for(G in 1:GENS) {
     if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
     warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
     
-    save(prey_res, file = 'prey_results/84500g_prey_res.Rda')
-    save(prey_details, file = 'prey_results/84500g_prey_details.Rda')
+    save(prey_res, file = 'simulations/prey_results/84500g_prey_res.Rda')
+    save(prey_details, file = 'simulations/prey_results/84500g_prey_details.Rda')
     
     break
     }
   
   #save results
-  save(prey_res, file = 'prey_results/84500g_prey_res.Rda')
-  save(prey_details, file = 'prey_results/84500g_prey_details.Rda')
+  save(prey_res, file = 'simulations/prey_results/84500g_prey_res.Rda')
+  save(prey_details, file = 'simulations/prey_results/84500g_prey_details.Rda')
   
   toc(log = TRUE)
 }
