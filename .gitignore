@@ -49,14 +49,20 @@ po/*~
 rsconnect/
 
 # figures
-# Ignore all PNGs
-*.png
 
-!figures/
-!figures/supporting_analysis/
-!figures/supporting_analysis/costsvsnocosts_modelresults.png
-!figures/project_update/
+# diagnostic figures
+figures/diagnostics
+figures/sensitivity/kcal_per_patch
 
 # other
 *.db
+
+# ignore result files and old results
 *.Rda
+sim_results/
+
+# ignore old scripts
+scripts/scratch_scripts/
+
+# ignore project update files
+project_updates
