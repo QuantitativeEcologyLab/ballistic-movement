@@ -1,4 +1,4 @@
-# Folder: figures/supplementary
+# figures/supplementary
 
 ## Purpose:
 This folder contains figures used for the supplementary documents of the project. 

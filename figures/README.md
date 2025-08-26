@@ -1,4 +1,4 @@
-# Folder: figures
+# figures
 
 ## Purpose:
 

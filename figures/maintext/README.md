@@ -1,4 +1,4 @@
-# Folder: figures/maintext
+# figures/maintext
 
 ## Purpose:
 

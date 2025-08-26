@@ -1,4 +1,4 @@
-# Folder: simulations/sensitivity
+# simulations/sensitivity
 
 ## Purpose:
 

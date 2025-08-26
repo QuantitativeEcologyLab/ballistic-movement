@@ -1,4 +1,4 @@
-# Folder: scripts
+# scripts
 
 ## Purpose:
 

@@ -1,4 +1,4 @@
-# Folder: simulations/supplementary
+# simulations/supplementary
 
 ## Purpose:
 

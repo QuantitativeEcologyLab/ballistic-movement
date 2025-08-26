@@ -1,4 +1,4 @@
-# Folder: figures/sensitivity
+# figures/sensitivity
 
 ## Purpose:
 

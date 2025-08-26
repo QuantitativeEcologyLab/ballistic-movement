@@ -1,4 +1,4 @@
-# Folder: simulations
+# simulations
 
 ## Purpose:
 

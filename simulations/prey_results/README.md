@@ -1,4 +1,4 @@
-# Folder: simulations/prey_results
+# simulations/prey_results
 
 ## Purpose:
 
