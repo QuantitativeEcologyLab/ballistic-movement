@@ -14,7 +14,7 @@ library(purrr)
 library(minpack.lm)
 library(mgcv) # for gam model
 library(scico)
-library(cowplot)
+library(cowplot) # for combining figures
 
 # Source the functions (ensure 'functions.R' is available in the working directory)
 source("scripts/functions.R")
@@ -275,8 +275,8 @@ save(df, file = "figures/maintext/42kg_movetracks.Rda")
 a <- 
   ggplot(df, aes(x = x, y = y)) +
   geom_path(linewidth = 0.3, col = "#5d6da7") +
-  ggplot2::annotate("text", x = max(df1$x), y = min(df1$y), label = "42.5 kg", hjust = 1.1, vjust = 0.3, size = 4, family = "sans") +
-  ggplot2::annotate("text", x = min(df1$x), y = max(df1$y), label = "(i)", hjust = 0, vjust = 1, size = 4, fontface = "bold", family = "sans") +
+  ggplot2::annotate("text", x = max(df$x), y = min(df$y), label = "42.5 kg", hjust = 1.1, vjust = 0.3, size = 4, family = "sans") +
+  ggplot2::annotate("text", x = min(df$x), y = max(df$y), label = "(i)", hjust = 0, vjust = 1, size = 4, fontface = "bold", family = "sans") +
   coord_equal() +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
@@ -332,8 +332,8 @@ save(df2, file = "figures/maintext/200kg_movetracks.Rda")
 b <- 
   ggplot(df2, aes(x = x, y = y)) +
   geom_path(linewidth = 0.5, col = "#ff6d6b") +
-  ggplot2::annotate("text", x = max(df_large1$x), y = min(df_large1$y), label = "200 kg", hjust = 1.1, vjust = 0.3, size = 4, family = "sans") +
-  ggplot2::annotate("text", x = min(df_large1$x), y = max(df_large1$y), label = "(ii)", hjust = 0, vjust = 1, size = 4, fontface = "bold", family = "sans") +
+  ggplot2::annotate("text", x = max(df2$x), y = min(df2$y), label = "200 kg", hjust = 1.1, vjust = 0.3, size = 4, family = "sans") +
+  ggplot2::annotate("text", x = min(df2$x), y = max(df2$y), label = "(ii)", hjust = 0, vjust = 1, size = 4, fontface = "bold", family = "sans") +
   theme_void() +
   coord_equal() +
   theme_bw() +

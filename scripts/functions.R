@@ -561,17 +561,48 @@ prey.fitness <- function(mass,
 #----------------------------------------------------------------------
 
 encounter <- function(prey.tracks, pred.tracks, range = 50){
-  distances <- list()
-  encounters <- vector()
-  for(i in 1:length(prey.tracks)){
-    #Pairwise separation distances over time
-    distances[[i]] <- SLD(pred.tracks[[1]]$x,pred.tracks[[1]]$y,
-                          prey.tracks[[i]]$x, prey.tracks[[i]]$y)
+  n.prey <- length(prey.tracks)
+  n.pred <- length(pred.tracks)
+
+  deaths <- data.frame(
+    prey_id = integer(),
+    pred_id = integer()
+  )
+  
+  for(i in seq_along(n.prey)){
+    # prey tracks
+    prey.x <- prey.tracks[[i]]$x
+    prey.y <- prey.tracks[[i]]$y
     
-    #Did it encounter a predator
-    encounters[i] <- any(distances[[i]]<range)
+    for(j in seq_along(n.pred)){
+      pred.x <- pred.tracks[[j]]$x
+      pred.y <- pred.tracks[[j]]$y
+      
+      #pairwise distance
+      d <- SLD(pred.x, pred.y, prey.x, prey.y)
+      
+      # did predators encounter prey?
+      if(any(d < range)) {
+        deaths <- rbind(
+          deaths, 
+          data.frame(prey_id = i, pred_id = j)
+        )
+        break
+      }
+    }
   }
-  return(encounters)
+  kills_per_pred <- integer(n.pred)
+  
+  if(nrow(deaths) > 0){
+    counts <- table(deaths$pred_id)
+    kills_per_pred[as.integer(names(counts))] <- as.vector(counts)
+  }
+  
+  return(list(
+    kills = kills_per_pred,
+    killed_prey = deaths$prey_id,
+    mapping = deaths
+  ))
 }
 
 #----------------------------------------------------------------------
