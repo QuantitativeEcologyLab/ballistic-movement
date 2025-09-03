@@ -129,53 +129,6 @@ range(grid_nocost$cal_net_pred)
 hist(grid_nocost$cal_net_pred) #heavily skewed, long tail
 
 # due to the long tail, it may be helpful to cap the predictions with a quantile to limit the range and make the difference more noticeable
-# set predictions to only include the 90 quantile
-grid_nocost$cal_net_pred2 <-grid_nocost$cal_net_pred
-grid_nocost[grid_nocost$cal_net_pred2 > quantile(grid_nocost$cal_net_pred2 , 0.95),"cal_net_pred2"] <- quantile(grid_nocost$cal_net_pred2 , 0.95)
-
-# customizing the breaks
-nocost_min_z <- min(grid_nocost$cal_net_pred2)
-nocost_max_z <- max(grid_nocost$cal_net_pred2)
-
-nocost_step <- (nocost_max_z - nocost_min_z) / 25 
-nocost_breaks <- seq(nocost_min_z, nocost_max_z, nocost_step)
-
-nocost_breaks <- nocost_breaks[nocost_breaks <= 6000000]
-
-d <-  
-  ggplot() +
-  ggtitle("D") +
-  geom_raster(data = grid_nocost, aes(x = lv, y = speed, fill = cal_net_pred2)) +
-  #geom_point(data = prey_details_df_nocosts, aes(x = lv, y = speed, color = generation)) +
-  geom_contour(data = grid_cost, aes(x = lv, y = speed, z = cal_net_pred2), color = 'black', linewidth = 0.1,
-               na.rm = TRUE, breaks = nocost_breaks) +
-  labs(x = expression(bold(l[v])), y = "Speed (m/s)", fill = "predicted\nnet calories") +
-  scale_fill_scico(palette = 'vikO', midpoint = 0) +
-  theme_bw() +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        axis.title.y = element_text(size=9, family = "sans", face = "bold"),
-        axis.title.x = element_text(size=9, family = "sans", face = "bold"),
-        axis.text.y = element_text(size=8, family = "sans"),
-        axis.text.x  = element_text(size=8, family = "sans"),
-        plot.title = element_text(hjust = -0.05, size = 12, family = "sans", face = "bold"),
-        plot.background = element_rect(fill = "transparent", color = NA),
-        plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm")) +
-  theme(
-    legend.text = element_text(size = 6, family = "sans"),
-    legend.title = element_text(size = 6, family = "sans", face = "bold"),
-    legend.key.size = unit(0.3, "cm"),
-    legend.spacing.y = unit(0.01, "cm"),
-    legend.margin = margin(0,0,0,0),
-    legend.background = element_rect(fill = "transparent", color = NA),
-    legend.key = element_rect(fill = "transparent", color = NA),
-    panel.background = element_rect(fill = "transparent"))
-
-# observe the range and histogram of the prediction data
-range(grid_nocost$cal_net_pred)
-hist(grid_nocost$cal_net_pred) #heavily skewed, long tail
-
-# due to the long tail, it may be helpful to cap the predictions with a quantile to limit the range and make the difference more noticeable
 # set predictions to only include the 95 quantile
 grid_nocost$cal_net_pred2 <-grid_nocost$cal_net_pred
 grid_nocost[grid_nocost$cal_net_pred2 > quantile(grid_nocost$cal_net_pred2 , 0.95),"cal_net_pred2"] <- quantile(grid_nocost$cal_net_pred2 , 0.95)
