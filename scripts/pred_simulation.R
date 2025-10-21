@@ -25,8 +25,10 @@ Ncores <- 10
 # run the simulation----
 #----------------------------------------------------------------------
 
+#seq(100, 300000, length.out = 20)
+
 # predator mass (g)
-mass_pred <- 50000
+mass_pred <- 100000
 
 # Prey mass (g)
 mass_prey <- prey.mass(mass_pred)
@@ -35,14 +37,14 @@ mass_prey <- prey.mass(mass_pred)
 t <- sampling(mass_prey, x = 40.5)
 
 #number of individuals in arena
-n_prey <- 10
-n_pred <- 10
+n_prey <- floor(1/mass_pred^(-0.25))
+n_pred <- 1
 
 #number of arenas
-REPS <- 1
+REPS <- 10
 
 #number of generations
-GENS <- 2
+GENS <- 1000
 
 #updated food raster function
 FOOD <- createFoodRaster(mass_prey, k = 240000, calories = 10)
@@ -111,9 +113,22 @@ for(G in 1:GENS) {
       #                          mu = c(CENTRES[[i]]$x, CENTRES[[i]]$y),
       #                          sigma = prey_sig)
       
+      #stationary prey
+      PREY_mods <- list()
+      for(i in 1:n_prey){
+        prey_tau_p <- prey.tau_p(mass_prey, variance = TRUE)
+        prey_tau_v <- prey.tau_v(mass_prey, variance = TRUE)
+        prey_sig <- prey.SIG(mass_prey)
+        prey_lv <- sqrt((prey_tau_v/prey_tau_p) * prey_sig)
+        
+        # create ctmm model
+        PREY_mods[[i]] <- ctmm(tau = c(prey_tau_p, prey_tau_v),
+                               mu = c(CENTRES[[i]]$x, CENTRES[[i]]$y),
+                               sigma = prey_sig)
+      }
       PRED_mods <- list()
       for(i in 1:n_pred){
-        pred_tau_p <- sample(PRED_tau_p,1)
+        pred_tau_p <- sample(PRED_tau_p,1) + rnorm(1, 0, 10) # add 'mutation' based variance
         pred_tau_v <- sample(PRED_tau_v,1) + rnorm(1, 0, 2) # add 'mutation' based variance
         pred_tau_v <- ctmm:::clamp(pred_tau_v, min = 0.1, max = Inf) # clamp the minimum to 0
         pred_sig <- sample(PRED_sig,1)
@@ -140,13 +155,21 @@ for(G in 1:GENS) {
     #                         t = t,
     #                         mc.cores = Ncores)
     
+    #for stationary prey
+    PREY_tracks <- make.prey.tracks(CENTRES, t)
+    
     # simulate predator movement
+
+    # PRED_tracks <- list()
+    # for(i in 1:n_pred){
+    #   PRED_tracks[[i]] <- simulate(PRED_mods[[i]], t = t)
+    # }
     
-    PRED_tracks <- list()
-    for(i in 1:n_pred){
-      PRED_tracks[[i]] <- simulate(PRED_mods[[i]], t = t)
-    }
-    
+    PRED_tracks <- mclapply(PRED_mods,
+                            FUN = simulate,
+                            t = t,
+                            mc.cores = Ncores)
+
     #extract ids of patches entered
     # benefits_prey <- vector("list", n_prey)
     # for(i in 1:n_prey){
@@ -176,9 +199,12 @@ for(G in 1:GENS) {
     }
     
     #calculate encounters
-    encounters <- encounter(prey.tracks = CENTRES,
-                            pred.tracks = PRED_tracks,
-                            range = sqrt(pred.SIG(mass_pred))) # perceptual range scaled to HR size
+    encounters <- encounter(PREY_tracks = PREY_tracks,
+                            PRED_tracks = PRED_tracks,
+                            range = sqrt(pred.SIG(mass_pred))*0.05) # perceptual range scaled to HR size
+
+    pred_kills <- encounters$pred_kills
+    prey_status <- encounters$prey_status
     
     #assign net calories to each individual
     # prey_cal_list <- vector("list", n_prey)
@@ -199,7 +225,7 @@ for(G in 1:GENS) {
     #extract predator calorie gains
     pred_cal_net <- list()
     for(i in 1:n_pred){
-      pred_cal_net <- pred.cals.net(encounters = encounters,
+      pred_cal_net <- pred.cals.net(pred_kills = pred_kills,
                                     mass = mass_pred,
                                     t = t,
                                     speed = pred_speed[[i]])
@@ -251,7 +277,8 @@ for(G in 1:GENS) {
                             tau_p = prey_TAU_P,
                             tau_v = prey_TAU_V,
                             sig = prey_SIGMA,
-                            lv = prey_lvs)
+                            lv = prey_lvs,
+                            costs = prey_status)
     
     # get pred values
     pred_lvs <- vector()
@@ -271,7 +298,7 @@ for(G in 1:GENS) {
                             tau_v = pred_TAU_V,
                             sig = pred_SIGMA,
                             lv = pred_lvs,
-                            encounters = sum(encounters[[i]]),
+                            encounters = pred_kills,
                             cal_net = pred_cal_net,
                             speed = unlist(pred_speed),
                             offspring = unlist(pred_offspring),
@@ -292,22 +319,22 @@ for(G in 1:GENS) {
   
   #Set up the parameters for the next generation based on
   #Fitness of current generation
-  PREY_tau_p <- vector()
-  PREY_tau_v <- vector()
-  PREY_sig <- vector()
-  for(i in 1:nrow(prey)){
-    if(prey[i,"offspring"] >0){
-      PREY_tau_p <- c(PREY_tau_p,
-                      rep(prey[i,"tau_p"], prey[i,"offspring"]))
-
-      PREY_tau_v <- c(PREY_tau_v,
-                      rep(prey[i,"tau_v"], prey[i,"offspring"]))
-
-      PREY_sig <- c(PREY_sig,
-                    rep(prey[i,"sig"], prey[i,"offspring"]))
-
-    } #Closes the if statement
-  } #closes loop over the number of prey
+  # PREY_tau_p <- vector()
+  # PREY_tau_v <- vector()
+  # PREY_sig <- vector()
+  # for(i in 1:nrow(prey)){
+  #   if(prey[i,"offspring"] >0){
+  #     PREY_tau_p <- c(PREY_tau_p,
+  #                     rep(prey[i,"tau_p"], prey[i,"offspring"]))
+  # 
+  #     PREY_tau_v <- c(PREY_tau_v,
+  #                     rep(prey[i,"tau_v"], prey[i,"offspring"]))
+  # 
+  #     PREY_sig <- c(PREY_sig,
+  #                   rep(prey[i,"sig"], prey[i,"offspring"]))
+  # 
+  #   } #Closes the if statement
+  # } #closes loop over the number of prey
   
   # predator
   pred_res[[G]] <- data.frame(generation = G,
@@ -346,8 +373,8 @@ for(G in 1:GENS) {
     # save(prey_details, file = 'simulations/prey_results/84500g_prey_details.Rda')
     # 
     # #save predator results
-    # save(pred_res, file = 'simulations/prey_results/84500g_pred_res.Rda')
-    # save(pred_details, file = 'simulations/prey_results/84500g_pred_details.Rda')
+    save(pred_res, file = 'simulations/pred_results/100000g_pred_res_stationary_prey.Rda')
+    save(pred_details, file = 'simulations/pred_results/100000g_pred_details_stationary_prey.Rda')
     
     break
   }
@@ -357,21 +384,24 @@ for(G in 1:GENS) {
   # save(prey_details, file = 'simulations/prey_results/84500g_prey_details.Rda')
   # 
   # #save predator results
-  # save(pred_res, file = 'simulations/prey_results/84500g_pred_res.Rda')
-  # save(pred_details, file = 'simulations/prey_results/84500g_pred_details.Rda')
+  save(pred_res, file = 'simulations/pred_results/100000g_pred_res_stationary_prey.Rda')
+  save(pred_details, file = 'simulations/pred_results/100000g_pred_details_stationary_prey.Rda')
   
   toc(log = TRUE)
 }
 
-
+pred_tracks <- as.data.frame(PRED_tracks)
 centres <- do.call(rbind, CENTRES)
 
 ggplot() +
-  geom_path(data = PRED_tracks[[1]], aes(x = x, y = y), color = "steelblue", linewidth = 0.7, alpha = 0.8) +
-  geom_path(data = PRED_tracks[[2]], aes(x = x, y = y), color = "deeppink4", linewidth = 0.7, alpha = 0.8) +
+  geom_path(data = pred_tracks, aes(x = x, y = y), color = "steelblue", linewidth = 0.7, alpha = 0.8) +
   geom_point(data = centres, aes(x = x, y = y)) +
   coord_equal() +
-  xlim(-600,200) +
-  ylim(-600,200) +
+  # xlim(-600,200) +
+  # ylim(-600,200) +
   theme_minimal() 
+
+pred_details_df <- do.call(rbind, pred_details)
+
+prey_details_df <- do.call(rbind, prey_details)
 

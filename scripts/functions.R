@@ -4,7 +4,7 @@
 
 #Written by Michael Noonan and Lynndsay Terpsma
 
-#Last updated: June 4th 2025
+#Last updated: October 20th 2025
 
 
 #----------------------------------------------------------------------
@@ -13,46 +13,6 @@
 library(ctmm) #for generating movement models
 library(raster) #for creating the food raster
 library(terra) #for creating the food raster
-
-#----------------------------------------------------------------------
-# create figure theme----
-#----------------------------------------------------------------------
-
-#theme is designed for saving with ggsave() with the following specs
-# width = 6.86, height = 3.5, units = "in", dpi = 600
-
-theme.qel <- function(legend = TRUE){
-  theme <- theme_bw() +
-    theme(panel.grid.major = element_blank(),
-          panel.grid.minor = element_blank(),
-          axis.title.y = element_text(size=6, family = "sans", face = "bold"),
-          axis.title.x = element_text(size=6, family = "sans", face = "bold"),
-          axis.text.y = element_text(size=4, family = "sans"),
-          axis.text.x  = element_text(size=4, family = "sans"),
-          plot.title = element_text(hjust = -0.05, size = 12, family = "sans", face = "bold"),
-          plot.background = element_rect(fill = "transparent", color = NA),
-          plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm"))
-  if(legend){
-    theme <- theme +
-      theme(
-        legend.position = "right",
-        legend.text = element_text(size = 4, family = "sans"),
-        legend.title = element_text(size = 5, family = "sans", face = "bold"),
-        legend.key.size = unit(0.2, "cm"),
-        legend.spacing.y = unit(0.1, "cm"),
-        legend.margin = margin(0,0,0,0),
-        legend.background = element_rect(fill = "transparent", color = NA),
-        legend.key = element_rect(fill = "transparent", color = NA),
-        panel.background = element_rect(fill = "transparent"))
-  } else {
-     theme <- theme + 
-       theme(legend.position = "none",
-             panel.grid = element_blank())
-   }
-
-  return(theme)
-  
-}
 
 #----------------------------------------------------------------------
 # Calculate the euclidean distance between two points----
@@ -560,56 +520,52 @@ prey.fitness <- function(mass,
 # Identify Encounter Events
 #----------------------------------------------------------------------
 
-encounter <- function(prey.tracks, pred.tracks, range = 50){
-  n.prey <- length(prey.tracks)
-  n.pred <- length(pred.tracks)
-
-  deaths <- data.frame(
-    prey_id = integer(),
-    pred_id = integer()
-  )
+encounter <- function(PREY_tracks, PRED_tracks, range = 50){
   
-  for(i in seq_along(n.prey)){
-    # prey tracks
-    prey.x <- prey.tracks[[i]]$x
-    prey.y <- prey.tracks[[i]]$y
+  prey_status <- rep(NA_integer_, length(PREY_tracks))
+  pred_kills <- 0L
     
-    for(j in seq_along(n.pred)){
-      pred.x <- pred.tracks[[j]]$x
-      pred.y <- pred.tracks[[j]]$y
-      
-      #pairwise distance
-      d <- SLD(pred.x, pred.y, prey.x, prey.y)
-      
-      # did predators encounter prey?
-      if(any(d < range)) {
-        deaths <- rbind(
-          deaths, 
-          data.frame(prey_id = i, pred_id = j)
-        )
-        break
-      }
+  for(i in 1:length(PREY_tracks)){
+    #Pairwise separation distances over time
+   distances <- SLD(PRED_tracks[[1]]$x, PRED_tracks[[1]]$y,
+                    PREY_tracks[[i]]$x, PREY_tracks[[i]]$y)
+
+    #Did it encounter a predator
+    if(any(distances < range)) {
+      prey_status[i] <- 1L
+      pred_kills <- pred_kills + 1L
     }
   }
-  kills_per_pred <- integer(n.pred)
-  
-  if(nrow(deaths) > 0){
-    counts <- table(deaths$pred_id)
-    kills_per_pred[as.integer(names(counts))] <- as.vector(counts)
-  }
-  
   return(list(
-    kills = kills_per_pred,
-    killed_prey = deaths$prey_id,
-    mapping = deaths
+    prey_status = prey_status,
+    pred_kills = pred_kills
   ))
+}
+
+# for stationary prey
+make.prey.tracks <- function(CENTRES, t){
+  n_prey <- length(CENTRES)
+  L <- length(t)
+  tracks <- vector("list", n_prey)
+
+  
+  for(i in seq_len(n_prey)) {  
+    xy <- c(x = CENTRES[[i]]$x, y = CENTRES[[i]]$y)
+    
+    tracks[[i]] <- data.frame(
+      t = t,
+      x = rep_len(xy[1], L),
+      y = rep_len(xy[2], L)
+    )
+  }
+  tracks
 }
 
 #----------------------------------------------------------------------
 # Predator calorie intake
 #----------------------------------------------------------------------
 
-pred.cals.net <- function(encounters, mass, t, speed){
+pred.cals.net <- function(pred_kills, mass, t, speed){
   
   time_total <- attr(t, "time_total")
   
@@ -634,9 +590,9 @@ pred.cals.net <- function(encounters, mass, t, speed){
   
   cost_total <- cost_move + cost_BMR
   
-  #Energy intake in cal based on Gorecki 1965 http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.915.5227&rep=rep1&type=pdf
+  #Energy intake in kcal based on Gorecki 1965 http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.915.5227&rep=rep1&type=pdf
   prey_mass <- prey.mass(mass)
-  intake <- 100 * prey_mass * sum(encounters[[i]])
+  intake <- 1.5 * prey_mass * pred_kills
   
   cal_net <- intake - cost_total
   
