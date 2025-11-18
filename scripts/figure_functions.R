@@ -57,6 +57,8 @@ theme.qel <- function(legend = TRUE){
 #----------------------------------------------------------------------
 
 prey.gen.summary <- function(res_df, details_df) {
+  mass <- unique(details_df$mass)
+  title <- paste("Results for Prey:", mass, "(g)")
   
   # relative change in lv ~ gen
   prey_LV <- res_df$lv[1]
@@ -138,13 +140,17 @@ prey.gen.summary <- function(res_df, details_df) {
   plot <- grid.arrange(p1, p2, p3,
                        p5, p4, p6, 
                        p7, p8, p9,
-                       ncol = 3)
+                       ncol = 3,
+                       top = textGrob(title, gp = gpar(fontsize = 12, fontface = "bold")))
   
   return(plot)
 }
   
 # for comparing other variables
 prey.var.summary <- function(details_df){
+  mass <- unique(details_df$mass)
+  title <- paste("Results for Prey:", mass, "(g)")
+  
   # number of patches ~ lv
   p1 <- 
     ggplot(details_df, aes(x = lv, y = patches)) +
@@ -220,7 +226,8 @@ prey.var.summary <- function(details_df){
                        p5, p6, 
                        p7, p8,
                        p9, p10,
-                       ncol = 2)
+                       ncol = 2,
+                       top = textGrob(title, gp = gpar(fontsize = 12, fontface = "bold")))
   
   return(plot)
 }
@@ -232,6 +239,8 @@ prey.var.summary <- function(details_df){
 
 # for comparing changes over the number of generations
 pred.gen.summary <- function(res_df, details_df){
+  mass <- unique(details_df$mass)
+  title <- paste("Results for Predator:", mass, "(g)")
   
   # relative change in lv ~ gen
   pred_LV <- res_df$lv[1]
@@ -311,15 +320,19 @@ pred.gen.summary <- function(res_df, details_df){
     theme_few()
   
   plot <- grid.arrange(p1, p2, p3,
-                       p5, p4, p6, 
+                       p4, p5, p6, 
                        p7, p8, p9,
-                       ncol = 3)
+                       ncol = 3,
+                       top = textGrob(title, gp = gpar(fontsize = 12, fontface = "bold")))
   
   return(plot)
 }
 
 # for comparing other variables
 pred.var.summary <- function(details_df){
+  mass <- unique(details_df$mass)
+  title <- paste("Results for Predator:", mass, "(g)")
+  
   # number of encounters ~ lv
   p1 <- 
     ggplot(details_df, aes(x = lv, y = encounters)) +
@@ -395,7 +408,8 @@ pred.var.summary <- function(details_df){
                        p5, p6, 
                        p7, p8,
                        p9, p10,
-                       ncol = 2)
+                       ncol = 2,
+                       top = textGrob(title, gp = gpar(fontsize = 12, fontface = "bold")))
   
   return(plot)
 }

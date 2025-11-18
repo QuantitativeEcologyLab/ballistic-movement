@@ -189,7 +189,7 @@ pred.tau_p <- function(mass, variance = FALSE) {
   tau_p <- 10^(tau_p)
   #Add variance if desired
   if(variance == TRUE){
-    sigma2 <- tau_p * 10
+    sigma2 <- tau_p * 20
     tau_p <- rgamma2(tau_p, sigma2, N = length(mass))
   }
   #Return
@@ -209,7 +209,7 @@ pred.tau_v <- function(mass, variance = FALSE) {
   tau_v <- 10^(tau_v)
   #Add variance if desired
   if(variance == TRUE){
-    sigma2 <- tau_v * 10
+    sigma2 <- tau_v * 20
     tau_v <- rgamma2(tau_v, sigma2, N = length(mass))}
   #Return
   return(tau_v)
@@ -238,6 +238,60 @@ prey.mass <- function(mass, variance = FALSE) {
 #----------------------------------------------------------------------
 # Generate raster of food patches based on mass_prey (g)----
 #----------------------------------------------------------------------
+
+# one more time:,)
+
+makeHabitat <- function(mass,
+                        type = c("grid", "regular", "poisson", "clustered"),
+                        n = 500,
+                        cluster_radius = 0.05,
+                        cluster_mu = 10,
+                        cv = 0,
+                        cal = 1){
+  SIG <- prey.SIG(mass)
+  
+  #range of raster based on 99.9% HR area
+  EXT <- round(sqrt((-2*log(0.0001)*pi)* SIG))
+  
+  #create landscape
+  win <- owin(c(-EXT, EXT), c(-EXT, EXT))
+  
+  type <- match.arg(type)
+  
+  if(type == "grid") {
+    #95% HR radius
+    HR <- round(sqrt((-2*log(0.05)*pi)*SIG))
+    #special grid
+    win_grid <- owin(c(-HR, HR), c(-HR, HR))
+    k <- ceiling(sqrt(n))
+    xy <- expand.grid(x = seq(-HR, HR, length.out = k),
+                      y = seq(-HR, HR, length.out = k))
+    pp <- ppp(xy$x, xy$y, window = win_grid)
+  }
+  else if(type == "regular"){
+    pp <- rSSI(r = EXT/sqrt(n), n = n, win = win)
+  }
+  else if(type == "poisson"){
+    pp <- rpoispp(lambda = n/(EXT^2), win = win)
+  }
+  else if(type == "clustered"){
+    pp <- rThomas(kapp = n/(EXT^2 * cluster_mu),
+                  scale = cluster_radius,
+                  mu = cluster_mu,
+                  win = win)
+  }
+  
+  # control CoV via gamma
+  if (cv > 0){
+    vals <- rgamma2(cal, cv, pp$n)
+  } else {
+    vals <- rep(cal, pp$n)
+  }
+  
+  marks(pp) <- vals
+  
+  return(pp)
+}
 
 # food raster function utilizing patches per 95% HR area (new)
 
@@ -287,47 +341,6 @@ createFoodRaster <- function(mass,
   return(food_raster)
 }
 
-#..............................................................................
-# old food raster function, using patch width scaled to prey.SIG
-# stored for legacy purposes
-
-makefood <- function(mass, width, pred = FALSE, 
-                     calories = 0.015, # calories per unit area
-                     heterogeneity = FALSE) {
-  # width = round(sqrt(prey.SIG(mass_prey))/10
-  
-  #var[position]
-  if(pred){SIG <- pred.SIG(mass)} else{
-    SIG <- prey.SIG(mass)}
-  
-  #range of raster based on 99.9% HR area
-  EXT <- round(sqrt((-2*log(0.0001)*pi)* SIG))
-  
-  #calculate the number of cells based on the EXT and the cell width
-  N <- EXT / width
-  
-  #calculate patch area from width
-  patch_area <- width^2
-  
-  #create raster with terra
-  food_raster <- rast(ncol = N, nrow = N,
-                      xmin = -EXT, xmax = EXT,
-                      ymin = -EXT, ymax = EXT)
-  
-  cal_per_patch <- calories * patch_area # convert cal_per_m2 to cal_per_patch
-  var <- 10
-  sigma2 <- cal_per_patch * var # creates sigma value, increase var to increase the variance
-  
-  #assign caloric values to raster
-  if (heterogeneity) {
-    values(food_raster) <- rgamma2(mu = cal_per_patch, sigma2 = sigma2, N = ncell(food_raster))
-  } else {
-    values(food_raster) <- cal_per_patch
-  }
-  #return calorie raster
-  return(food_raster)
-}
-
 #----------------------------------------------------------------------
 # Count the number of patches visited (assumes immediate renewal)----
 #----------------------------------------------------------------------
@@ -361,6 +374,52 @@ grazing <- function(track, habitat) {
   attr(IDs, "time") <- TIME
  
   return(IDs) 
+}
+
+#point process
+
+grazing_point <- function(mass, track, habitat){
+  SIG <- prey.SIG(mass)
+  HR <- round(sqrt((-2*log(0.05)*pi)*SIG))
+  #95% HR area
+  HR_area <- pi * HR^2
+  #area of each patch based on set number of patches in 95% HR
+  patch_area <- HR_area / 500 #where k is the number of patches in the 95% HR
+  #back calculate the width of each patch
+  pr <- sqrt(patch_area)
+  
+  hab_df <- data.frame(habitat$x, habitat$y)
+  hab_mat <- as.matrix(hab_df)
+  
+  track_df <- data.frame(x = track$x, y = track$y)
+  track_mat <- as.matrix(track_df)
+  
+  nn <- nn2(
+    data = hab_mat,
+    query = track_mat,
+    radius = pr,
+    searchtype = "radius"
+  )
+  
+  nearest_id <- nn$nn.idx[,1]
+  
+  within_range <- nearest_id != 0 
+  
+  marks_vec <- marks(habitat)
+  
+  IDs <- ifelse(within_range, nearest_id, NA)
+  
+  PATCHES <- sum(diff(IDs) != 0, na.rm = TRUE)
+  
+  entry_ids <- c(1, which(diff(IDs) != 0) + 1)
+  entry_IDs <- IDs[entry_ids]
+  
+  patch_values <- marks_vec[entry_IDs]
+
+  attr(IDs, "patch_values") <- patch_values
+  attr(IDs, "patches") <- PATCHES
+  
+  return(IDs)
 }
 
 #----------------------------------------------------------------------
@@ -639,4 +698,10 @@ pred.fitness <- function(mass,
 }
 
 
+
+time.function <- function(data, dt) {
+  time <- stuff
+    
+  return(time)
+}
 
