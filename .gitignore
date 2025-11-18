@@ -53,6 +53,7 @@ rsconnect/
 # diagnostic figures
 figures/diagnostics
 figures/sensitivity/kcal_per_patch
+figures/supplementary/generation_moveplots
 
 # other
 *.db
@@ -63,6 +64,7 @@ sim_results/
 
 # ignore old scripts
 scripts/scratch_scripts/
+scripts/pred_scripts/
 
 # ignore project update files
 project_updates
