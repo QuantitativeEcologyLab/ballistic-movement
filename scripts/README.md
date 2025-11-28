@@ -1,12 +1,7 @@
-# scripts
-
-## Purpose:
-
-This folder contains the R scripts used for the ballistic movement project.
-
-## Structure:
-
-- `ballistic_movement_sim.R`: the code used to run a simulation for predator and prey movement over evolutionary timescales.
-- `diagnostics.R`: contains the code needed for generating diagnostic figures for simulations.
-- `functions.R`: contains the custom functions needed to run the simulations in all scripts.
-- `plotting.R`: contains the code for creating the figures for the final analysis of the model outputs. 
+This folder contains all scripts used for simulations and analyses. Below is a description of the contents of each script.
+- `cost_analysis.R` contains the code used to model and investigate the relationship between energetic costs and offspring produced by individuals. Includes code for plotting these relationships.
+- `figure_functions.R` contains the custom functions needed to create figures in plotting related scripts, including custom themes.
+- `functions.R` contains the custom functions needed to run the simulations.
+- `plotting.R` contains the code for creating the figures for the final analysis of the model outputs, other than the cost analysis.
+- `prey_diagnostics.R` contains code used for creating diagnostic figures for prey only simulations.
+- `prey_simulation.R` contains code used for simulating mammalian movement across generations. 
