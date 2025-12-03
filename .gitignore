@@ -68,3 +68,4 @@ scripts/pred_scripts/
 
 # ignore project update files
 project_updates
+.Rhistory

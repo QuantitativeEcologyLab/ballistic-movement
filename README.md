@@ -1,5 +1,7 @@
 # A Computational Approach to Identifying Evolutionarily Stable Strategies in Mammalian Search Behaviour
 
+**Authors:** L. A. Terpsma, R. Martinez-Garcia, C. H. Fleming, W. F. Fagan, J. M. Calabrese, M. J. Noonan
+
 This repository contains the code supporting the results of Lynndsay Terpsma's 2025 URA Project and Honours thesis, which investigates the evolutionary trends in ballistic length scale under spatial and temporal variation in landscape resources. This project focuses on prey terrestrial mammals, and additionally investigates scaling relationships in ballistic length scale. 
 
 The simulated data can be reproduced by running the scripts in the scripts folder.
