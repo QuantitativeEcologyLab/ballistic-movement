@@ -10,14 +10,13 @@ library(extraDistr)
 library(parallel)
 library(ctmm)
 library(terra)
-library(ggplot2)
 library(dplyr)
-library(gridExtra)
-library(patchwork)
+library(spatstat)
+library(RANN)
 library(tictoc)
 
 # Source the functions (ensure 'functions.R' is available in the working directory)
-source("scripts/functions.R")
+source("scripts/prey/01_prey_functions.R")
 
 Ncores <- 20
 
@@ -32,7 +31,7 @@ Ncores <- 20
 #  500  11000  21500  32000  42500  53000  63500  74000  84500  95000 105500 116000 126500 137000 147500 158000 168500 179000 189500 200000
 
 # Prey mass (g)
-mass_prey <- 84500
+mass_prey <- 105500
 
 #set sampling interval and lifespan
 t <- sampling(mass_prey, x = 40.5)
@@ -47,7 +46,11 @@ REPS <- 10
 GENS <- 1000
 
 #updated food raster function
-FOOD <- createFoodRaster(mass_prey, k = 240000, calories = 8)
+FOOD <- makeHabitat(mass_prey,
+                    kappa = 0.0002,
+                    r = 7,
+                    mu = 12, 
+                    cal = 17)
 
 #lists for storing results
 prey_res <- list()
@@ -97,7 +100,7 @@ for(G in 1:GENS) {
       
       PREY_mods <- list()
       for(i in 1:n_prey){
-        prey_tau_p <- sample(PREY_tau_p,1)
+        prey_tau_p <- sample(PREY_tau_p,1) + rnorm(1,0,10)
         prey_tau_v <- sample(PREY_tau_v,1) + rnorm(1, 0, 2) # add 'mutation' based variance
         prey_tau_v <- ctmm:::clamp(prey_tau_v, min = 0.1, max = Inf) # clamp the minimum to 0
         prey_sig <- sample(PREY_sig,1)
@@ -131,7 +134,7 @@ for(G in 1:GENS) {
     # }
     
     benefits_prey <- mclapply(PREY_tracks, 
-                              function(track) grazing(track, FOOD), 
+                              function(track) grazing_point(mass_prey, track, FOOD), 
                               mc.cores = Ncores)
     
     #extract number of changes between patches
@@ -233,15 +236,15 @@ for(G in 1:GENS) {
     if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
     warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
     
-    save(prey_res, file = 'simulations/prey_results/84500g_prey_res.Rda')
-    save(prey_details, file = 'simulations/prey_results/84500g_prey_details.Rda')
+    save(prey_res, file = 'simulations/prey_results/105500g_poisson_prey_res.Rda')
+    save(prey_details, file = 'simulations/prey_results/105500g_poisson_prey_details.Rda')
     
     break
     }
   
   #save results
-  save(prey_res, file = 'simulations/prey_results/84500g_prey_res.Rda')
-  save(prey_details, file = 'simulations/prey_results/84500g_prey_details.Rda')
+  save(prey_res, file = 'simulations/prey_results/105500g_poisson_prey_res.Rda')
+  save(prey_details, file = 'simulations/prey_results/105500g_poisson_prey_details.Rda')
   
   toc(log = TRUE)
 }
