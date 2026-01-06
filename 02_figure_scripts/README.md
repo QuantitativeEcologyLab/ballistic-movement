@@ -1,2 +1,0 @@
-This folder contains all scripts used to generate figures from results. Details of each script can be found below.
-- `01_custom-ggplot-theme.R`: contains a custom function to add a consistent theme to figures.

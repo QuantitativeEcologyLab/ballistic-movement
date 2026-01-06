@@ -10,9 +10,8 @@
 # Package import
 
 library(ctmm) #for generating movement models
-library(raster) #for creating the food raster
-library(terra) #for creating the food raster
 library(spatstat) #for creating point process landscapes
+library(RANN) # for calculating nearest neighbors
 
 #.........................................................................
 # Calculate the euclidean distance between two points----
@@ -132,7 +131,7 @@ prey.tau_v <- function(mass, variance = FALSE) {
   tau_v <- 10^(tau_v)
   #Add variance if desired
   if(variance == TRUE){
-    sigma2 <- tau_v * 10
+    sigma2 <- tau_v *10
     tau_v <- rgamma2(tau_v, sigma2, N = length(mass))}
   #Return
   return(tau_v)
@@ -148,6 +147,7 @@ makeHabitat <- function(mass,
                         mu, 
                         tile_size = 500, 
                         cv = 0,
+                        target_n = NULL,
                         cal = 1){
   sig <- prey.SIG(mass)
   EXT <- round(sqrt((-2*log10(0.001)*pi)*sig))
@@ -174,6 +174,21 @@ makeHabitat <- function(mass,
   }
   pp_all <- do.call(superimpose, pts_list)
   pp_all[win]
+  
+  if(!is.null(target_n)){
+    N <- npoints(pp_all)
+    p <- target_n/N*1.01 #thin to slightly over desired points
+    pp_all <- rthin(pp_all, p)
+    
+    if(npoints(pp_all) < target_n){
+      stop("target n greater than simulated points")
+    } 
+    
+    #refine to exact desired
+    if(npoints(pp_all) > target_n){
+      pp_all <- pp_all[sample.int(npoints(pp_all), target_n)]
+    }
+  }
   
   # control CoV via gamma
   if (cv > 0){
@@ -273,7 +288,7 @@ grazing <- function(track, habitat) {
 }
 
 #.........................................................................
-# grazing function optimized for point process habitat 
+# grazing function optimized for point process habitat ----
 #.........................................................................
 
 grazing_point <- function(mass, track, habitat){
@@ -282,7 +297,7 @@ grazing_point <- function(mass, track, habitat){
   # #95% HR area
   # HR_area <- pi * HR^2
   # #area of each patch based on set number of patches in 95% HR
-  # patch_area <- HR_area / 240000 #where k is the number of patches in the 95% HR
+  # patch_area <- HR_area / 500 #where k is the number of patches in the 95% HR
   # #back calculate the width of each patch
   # pr <- sqrt(patch_area)
   
