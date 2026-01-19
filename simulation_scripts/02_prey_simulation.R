@@ -6,17 +6,12 @@ setwd("~/hdrive/GitHub/ballistic-movement")
 set.seed(123)
 
 # Import necessary packages
-library(extraDistr)
-library(parallel)
-library(ctmm)
-library(terra)
-library(dplyr)
-library(spatstat)
-library(RANN)
-library(tictoc)
+library(extraDistr) # for bivariate poisson distribution of centres
+library(parallel) # for parallel computing
+library(tictoc) # for timing simulations
 
 # Source the functions (ensure 'functions.R' is available in the working directory)
-source("scripts/prey/01_prey_functions.R")
+source("simulation_scripts/01_prey_functions.R")
 
 Ncores <- 20
 
@@ -49,8 +44,12 @@ GENS <- 1000
 FOOD <- makeHabitat(mass_prey,
                     kappa = 0.0002,
                     r = 7,
-                    mu = 12, 
-                    cal = 17)
+                    mu = 6, 
+                    target_n = 120000,
+                    cal = 20.1)
+
+#check the number of points in the landscape 
+# FOOD$n
 
 #lists for storing results
 prey_res <- list()
@@ -61,7 +60,6 @@ for(G in 1:GENS) {
   tic(paste("Generation", G))
   
   prey <- list()
-  # pred <- list()
   
   for(R in 1:REPS){
     
@@ -156,7 +154,7 @@ for(G in 1:GENS) {
     for(i in 1:n_prey){
       mass <- if(length(mass_prey) == 1) mass_prey else mass_prey[i]
 
-      prey_cal_list[[i]] <- prey.cals.net(IDs = benefits_prey[[i]],
+      prey_cal_list[[i]] <- prey.cals.net(calories = benefits_prey[[i]],
                                           mass = mass,
                                           speed = prey_speed[[i]],
                                           t = t)
@@ -185,8 +183,6 @@ for(G in 1:GENS) {
       prey_lvs[i] <- sqrt((prey_TAU_V[i]/prey_TAU_P[i])*prey_SIGMA[i])
     }
     
-    #summarise  # save(prey_res, file = 'sim_results/july16/5000000g_longlife_prey_res.Rda')
-    # save(prey_details, file = 'sim_results/july16/5000000g_longlife_prey_details.Rda')
     prey[[R]] <- data.frame(generation = G,
                             tau_p = prey_TAU_P,
                             tau_v = prey_TAU_V,
@@ -203,10 +199,8 @@ for(G in 1:GENS) {
   } # closes loop over number of arenas
   
   prey <- do.call(rbind, prey)
-  # pred <- do.call(rbind, pred)
   
   # save the results
-  # prey
   prey_res[[G]] <- data.frame(generation = G, 
                               lv = mean(prey$lv),
                               var = var(prey$lv))
@@ -236,16 +230,17 @@ for(G in 1:GENS) {
     if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
     warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
     
-    save(prey_res, file = 'simulations/prey_results/105500g_poisson_prey_res.Rda')
-    save(prey_details, file = 'simulations/prey_results/105500g_poisson_prey_details.Rda')
+    save(prey_res, file = 'simulations/prey_results/105500g_calorie_variance/20p1_prey_res.Rda')
+    save(prey_details, file = 'simulations/prey_results/105500g_calorie_variance/20p1_prey_details.Rda')
     
     break
     }
   
   #save results
-  save(prey_res, file = 'simulations/prey_results/105500g_poisson_prey_res.Rda')
-  save(prey_details, file = 'simulations/prey_results/105500g_poisson_prey_details.Rda')
+  save(prey_res, file = 'simulations/prey_results/105500g_calorie_variance/20p1_prey_res.Rda')
+  save(prey_details, file = 'simulations/prey_results/105500g_calorie_variance/20p1_prey_details.Rda')
   
   toc(log = TRUE)
 }
+
 

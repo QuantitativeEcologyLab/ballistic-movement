@@ -10,17 +10,9 @@
 # Package import
 
 library(ctmm) #for generating movement models
-library(spatstat) #for creating point process landscapes
+library(spatstat.geom) #for creating point process window
+library(spatstat.random) #for simulating point process
 library(RANN) # for calculating nearest neighbors
-
-#.........................................................................
-# Calculate the euclidean distance between two points----
-#.........................................................................
-
-#used to help calculate encounters
-SLD <- function(x_1, y_1, x_2, y_2){
-  sqrt((x_1 - x_2)^2 + (y_1 - y_2)^2)
-}
 
 #.........................................................................
 # re-parameterize rgamma() as a function of mean and variance----
@@ -203,138 +195,50 @@ makeHabitat <- function(mass,
 }
 
 #.........................................................................
-# food raster function utilizing patches per 95% HR area 
-#.........................................................................
-
-createFoodRaster <- function(mass, 
-                             k = 240000, # number of patches in the 95% HR area
-                             pred = FALSE, 
-                             calories = 1,
-                             var = 0) {
-  
-  #var[position]
-  if(pred){SIG <- pred.SIG(mass)} else{
-    SIG <- prey.SIG(mass)}
-  
-  #range of raster based on 99.9% HR area
-  EXT <- round(sqrt((-2*log(0.0001)*pi)* SIG))
-  
-  #95% HR radius
-  HR <- round(sqrt((-2*log(0.05)*pi)*SIG))
-
-  #95% HR area
-  HR_area <- pi * HR^2
-  #area of each patch based on set number of patches in 95% HR
-  patch_area <- HR_area / k #where k is the number of patches in the 95% HR
-  #back calculate the width of each patch
-  width <- sqrt(patch_area)
-  
-  #assign number of cells based on EXT and width
-  N <- ceiling(2 * EXT / width)
-  
-  #create raster with terra
-  food_raster <- rast(ncol = N, nrow = N,
-                      xmin = -EXT, xmax = EXT,
-                      ymin = -EXT, ymax = EXT)
-  
-  #assign caloric values to raster
-  #heterogeneous landscapes created with a gamma distribution based on the mean and variance
-  if (var == 0) {
-    values(food_raster) <- calories 
-  } else {
-    #create variance as a function of the number of calories
-    #this helps keep is more consistent across the calorie spectrum (and thus the mass spectrum)
-    sigma2 <- calories * var # creates sigma value, increase var to increase the variance
-    values(food_raster) <- rgamma2(mu = calories, sigma2 = sigma2, N = ncell(food_raster))
-  }
-  
-  #return calorie raster
-  return(food_raster)
-}
-
-#.........................................................................
-# Count the number of patches visited (assumes immediate renewal)----
-#.........................................................................
-
-grazing <- function(track, habitat) {
-  
-  #convert track to data frame
-  coords <- data.frame(x = track$x, y = track$y)
-  
-  #patch identities
-  IDs <- cellFromXY(habitat, coords)
-  
-  #count the number of times it moved to a new food patch (total movements)
-  PATCHES <- sum(diff(IDs) != 0)
-  
-  #mean time between patches 
-  TIME <- mean(rle(c(FALSE, diff(IDs) != 0))$lengths)
-  
-  #find indices (cell identity) for when it moved to a new food patch
-  entry_ids <- c(1, which(diff(IDs) != 0) + 1)
-  
-  #get IDs for those patches
-  entry_IDs <- IDs[entry_ids]
-  
-  #get values from the raster
-  patch_values <- habitat[entry_IDs]
-  
-  #attributes
-  attr(IDs, "patch_values") <- patch_values
-  attr(IDs, "patches") <- PATCHES
-  attr(IDs, "time") <- TIME
- 
-  return(IDs) 
-}
-
-#.........................................................................
 # grazing function optimized for point process habitat ----
 #.........................................................................
 
 grazing_point <- function(mass, track, habitat){
-  # SIG <- prey.SIG(mass)
-  # HR <- round(sqrt((-2*log(0.05)*pi)*SIG))
-  # #95% HR area
-  # HR_area <- pi * HR^2
-  # #area of each patch based on set number of patches in 95% HR
-  # patch_area <- HR_area / 500 #where k is the number of patches in the 95% HR
-  # #back calculate the width of each patch
-  # pr <- sqrt(patch_area)
-  
+
   pr <- sqrt(prey.SIG(mass))*0.05
   
-  hab_df <- data.frame(habitat$x, habitat$y)
-  hab_mat <- as.matrix(hab_df)
+  hab_mat <- cbind(habitat$x, habitat$y)
   
-  track_df <- data.frame(x = track$x, y = track$y)
-  track_mat <- as.matrix(track_df)
+  track_mat <- cbind(track$x, track$y)
+  
+  marks_vec <- marks(habitat)
+  consumed <- logical(length(marks_vec))
+  calories <- 0
   
   nn <- nn2(
     data = hab_mat,
     query = track_mat,
-    radius = pr,
-    searchtype = "radius"
+    searchtype = "radius",
+    radius = pr
   )
   
-  nearest_id <- nn$nn.idx[,1]
+  for (t in seq_len(nrow(track_mat))){
+    
+    ids <- nn$nn.idx[t,]
+    
+    if(ids[1] == 0) next
+    
+    for(id in ids) {
+      if(id == 0) break
+      if(!consumed[id]) {
+        calories <- calories + marks_vec[id]
+        consumed[id] <- TRUE
+      }
+    }
+  }
   
-  within_range <- nearest_id != 0 
+  df <- data.frame(consumed)
+  df$id <- rownames(consumed)
   
-  marks_vec <- marks(habitat)
+  attr(calories, "patches") <- sum(consumed)
+  attr(calories, "consumed") <- df
   
-  IDs <- ifelse(within_range, nearest_id, NA)
-  
-  PATCHES <- sum(diff(IDs) != 0, na.rm = TRUE)
-  
-  entry_ids <- c(1, which(diff(IDs) != 0) + 1)
-  entry_IDs <- IDs[entry_ids]
-  
-  patch_values <- marks_vec[entry_IDs]
-
-  attr(IDs, "patch_values") <- patch_values
-  attr(IDs, "patches") <- PATCHES
-  
-  return(IDs)
+  return(calories)
 }
 
 #.........................................................................
@@ -389,13 +293,12 @@ sampling <- function(mass, x = 40.5) {
 # net calories from grazing----
 #.........................................................................
 
-prey.cals.net <- function(IDs, mass, speed, t){
+prey.cals.net <- function(calories, mass, speed, t){
   
   time_total <- attr(t, "time_total")
   
   #extract calorie values from which the movement track overlaps
-  patch_values <- attr(IDs, "patch_values")
-  cal_gross <- sum(patch_values, na.rm = TRUE)
+  cal_gross <- calories
   
   # #metabolic rate (kj/day) from Nagy 1987 https://doi.org/10.2307/1942620
   BMR <- 0.774 + 0.727 * log10(mass)
