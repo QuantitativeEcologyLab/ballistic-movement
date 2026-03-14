@@ -27,8 +27,6 @@ rgamma2 <- function(mu, sigma2, N = n()) {
          scale = sigma2 / mu) # (k * theta^2) / (k * theta)
 }
 
-
-
 #.........................................................................
 # Generate prey movement model based on prey mass (in g)----
 #.........................................................................
@@ -130,20 +128,54 @@ prey.tau_v <- function(mass, variance = FALSE) {
 }
 
 #.........................................................................
+# define "lifespan" and sampling interval----
+#.........................................................................
+
+#sampling function with lifespan scaled to body mass
+
+sampling <- function(mass, x = 10) {
+  
+  #calculate lifespan in seconds from de Magalhaes et al (2008) https://doi.org/10.1093/gerona/62.2.149
+  lifespan <- (4.88*mass^0.153) * 31536000 # years to seconds
+  time_total <- lifespan * 0.001 # 1/1000 of a lifespan
+  
+  #sampling interval (tau_v) in seconds, max prevents tau_v < 1
+  #increasing x decreases interval, making sampling more frequent
+  interval <- max(1, round(prey.tau_v(mass))) / x
+  
+  #lifespan and sampling interval for simulations
+  t <- seq(0,
+           time_total,
+           interval)
+  
+  # assign attributes
+  attr(t, "interval") <- interval
+  attr(t, "lifespan") <- lifespan
+  attr(t, "time_total") <- time_total
+  
+  return(t)
+}
+
+#.........................................................................
 # Generate point process of food patches based on mass_prey (g)----
 #.........................................................................
 
 makeHabitat <- function(mass, 
-                        kappa, 
                         r, 
                         mu, 
-                        tile_size = 500, 
-                        cv = 0,
+                        var = 0,
                         target_n = NULL,
-                        cal = 1){
+                        cal = 1,
+                        tile_size = 500){
   sig <- prey.SIG(mass)
   EXT <- round(sqrt((-2*log10(0.001)*pi)*sig))
   win <- owin(c(-EXT, EXT), c(-EXT, EXT))
+  
+  # intensity = total points / area
+  lambda <- target_n / area.owin(win)
+  
+  # number parents = intensity / mean number offspring
+  kappa <- lambda/mu
   
   win_x <- win$xrange
   win_y <- win$yrange
@@ -173,7 +205,7 @@ makeHabitat <- function(mass,
     pp_all <- rthin(pp_all, p)
     
     if(npoints(pp_all) < target_n){
-      stop("target n greater than simulated points")
+      stop("target n greater than simulated points - resimulate")
     } 
     
     #refine to exact desired
@@ -182,9 +214,9 @@ makeHabitat <- function(mass,
     }
   }
   
-  # control CoV via gamma
-  if (cv > 0){
-    vals <- rgamma2(cal, cv, pp_all$n)
+  # control CoV via gamma (defined by mean and variance)
+  if (var > 0){
+    vals <- rgamma2(cal, var, pp_all$n)
   } else {
     vals <- rep(cal, pp_all$n)
   }
@@ -198,7 +230,7 @@ makeHabitat <- function(mass,
 # grazing function optimized for point process habitat ----
 #.........................................................................
 
-grazing_point <- function(mass, track, habitat){
+grazing <- function(mass, track, habitat){
 
   pr <- sqrt(prey.SIG(mass))*0.05
   
@@ -258,35 +290,6 @@ get.speed <- function(models){
   
   #return speed
   return(SPEED)
-}
-
-#.........................................................................
-# define "lifespan" and sampling interval----
-#.........................................................................
-
-#sampling function with lifespan scaled to body mass
-
-sampling <- function(mass, x = 40.5) {
-  
-  #calculate lifespan in seconds from de Magalhaes et al (2008) https://doi.org/10.1093/gerona/62.2.149
-  lifespan <- (4.88*mass^0.153) * 31536000 # years to seconds
-  time_total <- lifespan * 0.001 # 1/1000 of a lifespan
-  
-  #sampling interval (tau_v) in seconds
-  #increasing x decreases interval, making sampling more frequent
-  interval <- max(1, round(prey.tau_v(mass))) / x
-  
-  #lifespan and sampling interval for simulations
-  t <- seq(0,
-           time_total,
-           interval)
-  
-  # assign attributes
-  attr(t, "interval") <- interval
-  attr(t, "lifespan") <- lifespan
-  attr(t, "time_total") <- time_total
-  
-  return(t)
 }
 
 #.........................................................................

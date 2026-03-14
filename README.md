@@ -19,8 +19,8 @@ Each folder contains another README file which describes each component in great
 
 The below provides details on the workflow needed to reproduce simulations. The R files listed below are found in the `simulation_scripts` folder.
 
-* `01_prey_functions.R`: functions for generating prey only simulations
-* `02_prey_simulation.R`: workflow for simulating evolution of prey search behaviour over evolutionary timescales.
+* `01-prey-functions.R`: functions for generating prey only simulations
+* `02-prey-simulation.R`: workflow for simulating evolution of prey search behaviour over evolutionary timescales.
 
 # R Enviroment and Packages
 

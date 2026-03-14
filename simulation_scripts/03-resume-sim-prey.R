@@ -1,0 +1,212 @@
+# Preamble......................................................................
+
+# this script is designed to finish simulations that have crashed/failed or need to 
+# be extended for more generations
+
+# Set the working directory
+setwd("~/hdrive/GitHub/ballistic-movement")
+# Set the random seed
+set.seed(123)
+
+# Import necessary packages
+library(extraDistr) # for bivariate poisson distribution of centres
+library(parallel) # for parallel computing
+library(tictoc) # for timing simulations
+
+# Source the functions (ensure 'functions.R' is available in the working directory)
+source("simulation_scripts/01-prey-functions.R") #more packages are included here
+
+#set the number of cores to use (if on Linux/MacOS and utiilising parallelisation)
+Ncores <- 20
+
+#......................................................................
+# simulation setup ----
+#......................................................................
+
+#load in landscape
+FOOD <- readRDS("simulations/prey_results/num_patches/habitats/2000_patches.Rds")
+
+#load in the partial dataset
+prey_res <- readRDS("simulations/prey_results/clustering/105500g_mu1_prey_res.Rds")
+prey_details <- readRDS("simulations/prey_results/clustering/105500_mu1_prey_details.Rds")
+
+last_gen <- length(prey_details)
+
+#ensure these are available in environment
+
+# # Prey mass (g)
+mass_prey <- 105500
+# 
+# #set sampling interval and lifespan
+t <- sampling(mass_prey, x = 10)
+# 
+# #number of individuals in arena
+n_prey <- 20
+# 
+# #number of arenas
+REPS <- 10
+
+#number of generations (total, not how many extra you need)
+GENS <- 8000
+
+prey <- prey_details[[last_gen]]
+
+PREY_tau_p <- PREY_tau_v <- PREY_sig <- numeric(0)
+
+for(i in 1:nrow(prey)) {
+  if(prey$offspring[i] > 0) {
+    PREY_tau_p <- c(PREY_tau_p, rep(prey$tau_p[i], prey$offspring[i]))
+    PREY_tau_v <- c(PREY_tau_v, rep(prey$tau_v[i], prey$offspring[i]))
+    PREY_sig <- c(PREY_sig, rep(prey$sig[i], prey$offspring[i]))
+  }
+}
+
+#......................................................................
+# start simulation  ----
+#......................................................................
+
+for(G in (last_gen + 1):GENS) {
+  tic(paste("Generation", G))
+  
+  prey <- list()
+  
+  for(R in 1:REPS){
+    CENTRES <- rbvpois(n = n_prey,
+                       a = prey.SIG(mass_prey)*0.75,
+                       b = prey.SIG(mass_prey)*0.75,
+                       c = 0)
+    CENTRES <- scale(CENTRES, scale = FALSE)
+    
+    PREY_mods <- list()
+    for(i in 1:n_prey){
+      prey_tau_p <- sample(PREY_tau_p,1) + rnorm(1,0,10)
+      prey_tau_p <- ctmm:::clamp(prey_tau_p, min = 0.1, max = Inf) # clamp minimum to 0 
+      prey_tau_v <- sample(PREY_tau_v,1) + rnorm(1, 0, 2) # add 'mutation' based variance
+      prey_tau_v <- ctmm:::clamp(prey_tau_v, min = 0.1, max = Inf) # clamp the minimum to 0
+      prey_sig <- sample(PREY_sig,1)
+      prey_lv <- sqrt((prey_tau_v/prey_tau_p)*prey_sig)
+      
+      # create ctmm model
+      PREY_mods[[i]] <- ctmm(tau = c(prey_tau_p, prey_tau_v),
+                             mu = c(CENTRES[i,1], CENTRES[i,2]),
+                             sigma = prey_sig)
+    } # closes loop over n_prey
+    
+    # simulate prey movement
+    # parallelised to speed up run times
+    PREY_tracks <- mclapply(PREY_mods,
+                            FUN = simulate,
+                            t = t,
+                            mc.cores = Ncores)
+    
+    benefits_prey <- mclapply(PREY_tracks, 
+                              function(track) grazing(mass_prey, track, FOOD), 
+                              mc.cores = Ncores)
+    
+    #extract number of changes between patches
+    patches <- vector("list", n_prey)
+    for(i in 1:n_prey){
+      patches[[i]] <- attr(benefits_prey[[i]], "patches")
+    }
+    
+    #extract prey speed from model
+    prey_speed <- numeric(n_prey)
+    for(i in 1:n_prey){
+      prey_speed[[i]] <- get.speed(models = PREY_mods[[i]])
+    }
+    
+    #assign net calories to each individual
+    prey_cal_list <- vector("list", n_prey)
+    prey_cal_net <- numeric(n_prey)
+    prey_costs <- numeric(n_prey)
+    for(i in 1:n_prey){
+      mass <- if(length(mass_prey) == 1) mass_prey else mass_prey[i]
+      
+      prey_cal_list[[i]] <- prey.cals.net(calories = benefits_prey[[i]],
+                                          mass = mass,
+                                          speed = prey_speed[[i]],
+                                          t = t)
+      
+      prey_cal_net[i] <- prey_cal_list[[i]]$cal_net
+      prey_costs[i] <- prey_cal_list[[i]]$costs
+    }
+    
+    # compute prey offspring
+    # output is a list of two variables
+    prey_results <- prey.fitness(mass = mass_prey,
+                                 cal_net = prey_cal_net)
+    
+    offspring_prey <- prey_results$offspring #assign offspring 
+    mass_update_prey <- prey_results$mass_update #assign mass update
+    
+    # get prey values
+    prey_lvs <- vector()
+    prey_TAU_V <- vector()
+    prey_TAU_P <- vector()
+    prey_SIGMA <- vector()
+    for(i in 1:n_prey){
+      prey_TAU_V[i] <- PREY_mods[[i]]$tau["velocity"]
+      prey_TAU_P[i] <- PREY_mods[[i]]$tau["position"]
+      prey_SIGMA[i] <- ctmm:::area.covm(PREY_mods[[i]]$sigma)
+      prey_lvs[i] <- sqrt((prey_TAU_V[i]/prey_TAU_P[i])*prey_SIGMA[i])
+    }
+    
+    prey[[R]] <- data.frame(generation = G,
+                            tau_p = prey_TAU_P,
+                            tau_v = prey_TAU_V,
+                            sig = prey_SIGMA,
+                            lv = prey_lvs,
+                            patches = unlist(patches),
+                            cal_net = prey_cal_net,
+                            costs = prey_costs,
+                            speed = unlist(prey_speed),
+                            offspring = unlist(offspring_prey),
+                            mass = mass_prey,
+                            mass_update = unlist(mass_update_prey))
+    
+  } # closes loop over number of arenas
+  
+  prey <- do.call(rbind, prey)
+  
+  # save the results
+  prey_res[[G]] <- data.frame(generation = G, 
+                              lv = mean(prey$lv),
+                              var = var(prey$lv))
+  
+  prey_details[[G]] <- prey
+  
+  #Set up the parameters for the next generation based on
+  #Fitness of current generation
+  PREY_tau_p <- vector()
+  PREY_tau_v <- vector()
+  PREY_sig <- vector()
+  for(i in 1:nrow(prey)){
+    if(prey[i,"offspring"] >0){
+      PREY_tau_p <- c(PREY_tau_p,
+                      rep(prey[i,"tau_p"], prey[i,"offspring"]))
+      
+      PREY_tau_v <- c(PREY_tau_v,
+                      rep(prey[i,"tau_v"], prey[i,"offspring"]))
+      
+      PREY_sig <- c(PREY_sig,
+                    rep(prey[i,"sig"], prey[i,"offspring"]))
+      
+    } #Closes the if statement
+  } #closes loop over the number of prey
+  
+  # If no offspring, save results and stop simulation
+  if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
+    warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
+    
+    saveRDS(prey_res, file = 'simulations/prey_results/num_patches/6800p_prey_res.Rds')
+    saveRDS(prey_details, file = 'simulations/prey_results/num_patches/6800p_prey_details.Rds')
+    
+    break
+  }
+  
+  #save results
+  saveRDS(prey_res, file = 'simulations/prey_results/num_patches/6800p_prey_res.Rds')
+  saveRDS(prey_details, file = 'simulations/prey_results/num_patches/6800p_prey_details.Rds')
+  
+  toc(log = TRUE)
+}

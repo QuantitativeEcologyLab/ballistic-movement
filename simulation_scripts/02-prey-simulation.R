@@ -9,27 +9,26 @@ set.seed(123)
 library(extraDistr) # for bivariate poisson distribution of centres
 library(parallel) # for parallel computing
 library(tictoc) # for timing simulations
+library(dplyr) # data cleaning
 
 # Source the functions (ensure 'functions.R' is available in the working directory)
-source("simulation_scripts/01_prey_functions.R")
+source("simulation_scripts/01-prey-functions.R")
 
+#set the number of cores to use
 Ncores <- 20
 
-#----------------------------------------------------------------------
-# run the simulation----
-#----------------------------------------------------------------------
+#.........................................................................
+# simulation setup ----
+#.........................................................................
 
 #calculate what masses are used for the analysis of prey individuals
 # masses <- seq(500, 200000, length.out = 20)
-
-# masses to test
-#  500  11000  21500  32000  42500  53000  63500  74000  84500  95000 105500 116000 126500 137000 147500 158000 168500 179000 189500 200000
 
 # Prey mass (g)
 mass_prey <- 105500
 
 #set sampling interval and lifespan
-t <- sampling(mass_prey, x = 40.5)
+t <- sampling(mass_prey, x = 10)
 
 #number of individuals in arena
 n_prey <- 20
@@ -38,24 +37,34 @@ n_prey <- 20
 REPS <- 10
 
 #number of generations
-GENS <- 1000
+GENS <- 4000
+
+p <- round(seq(2000, 50000, length.out = 21))
 
 #updated food raster function
 FOOD <- makeHabitat(mass_prey,
-                    kappa = 0.0002,
-                    r = 7,
-                    mu = 6, 
-                    target_n = 120000,
-                    cal = 20.1)
+                    r = 1,
+                    mu = 1, 
+                    target_n = 11600,
+                    cal = 100)
 
-#check the number of points in the landscape 
-# FOOD$n
+#check number of patches in landscape
+FOOD$n
+
+#plot to see distribution of points
+#plot(FOOD$x, FOOD$y, pch = 16)
+
+#save the landscape
+saveRDS(FOOD, file = "simulations/prey_results/num_patches/habitats/11600_patches.Rds")
 
 #lists for storing results
 prey_res <- list()
 prey_details <- list()
 
-#start the simulation ----
+#.........................................................................
+# start simulation ----
+#.........................................................................
+
 for(G in 1:GENS) {
   tic(paste("Generation", G))
   
@@ -99,6 +108,7 @@ for(G in 1:GENS) {
       PREY_mods <- list()
       for(i in 1:n_prey){
         prey_tau_p <- sample(PREY_tau_p,1) + rnorm(1,0,10)
+        prey_tau_p <- ctmm:::clamp(prey_tau_p, min = 0.1, max = Inf) # clamp minimum to 0 
         prey_tau_v <- sample(PREY_tau_v,1) + rnorm(1, 0, 2) # add 'mutation' based variance
         prey_tau_v <- ctmm:::clamp(prey_tau_v, min = 0.1, max = Inf) # clamp the minimum to 0
         prey_sig <- sample(PREY_sig,1)
@@ -132,7 +142,7 @@ for(G in 1:GENS) {
     # }
     
     benefits_prey <- mclapply(PREY_tracks, 
-                              function(track) grazing_point(mass_prey, track, FOOD), 
+                              function(track) grazing(mass_prey, track, FOOD), 
                               mc.cores = Ncores)
     
     #extract number of changes between patches
@@ -198,7 +208,7 @@ for(G in 1:GENS) {
     
   } # closes loop over number of arenas
   
-  prey <- do.call(rbind, prey)
+  prey <- bind_rows(prey)
   
   # save the results
   prey_res[[G]] <- data.frame(generation = G, 
@@ -230,15 +240,16 @@ for(G in 1:GENS) {
     if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
     warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
     
-    save(prey_res, file = 'simulations/prey_results/105500g_calorie_variance/20p1_prey_res.Rda')
-    save(prey_details, file = 'simulations/prey_results/105500g_calorie_variance/20p1_prey_details.Rda')
+    # save results of failed simulation
+      saveRDS(prey_res, file = 'simulations/prey_results/num_patches/11600p_prey_res.Rds')
+      saveRDS(prey_details, file = 'simulations/prey_results/num_patches/11600p_prey_details.Rds')
     
     break
     }
   
   #save results
-  save(prey_res, file = 'simulations/prey_results/105500g_calorie_variance/20p1_prey_res.Rda')
-  save(prey_details, file = 'simulations/prey_results/105500g_calorie_variance/20p1_prey_details.Rda')
+  saveRDS(prey_res, file = 'simulations/prey_results/num_patches/11600p_prey_res.Rds')
+  saveRDS(prey_details, file = 'simulations/prey_results/num_patches/11600p_prey_details.Rds')
   
   toc(log = TRUE)
 }
