@@ -7,10 +7,10 @@ library(paletteer)
 library(ggforce)
 
 source("simulation_scripts/01-prey-functions.R")
-source("figure_scripts/01-custom-ggplot-theme.R")
 
 #...............................................................................
 ## with consumed patches as a different colour
+#...............................................................................
 
 mass <- 105500
 

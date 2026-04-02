@@ -48,24 +48,20 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 
-# figures
-
-# diagnostic figures
-figures/diagnostics
-figures/sensitivity/kcal_per_patch
-figures/supplementary/generation_moveplots
-
 # other
 *.db
 
 # ignore result files and old results
 *.Rda
-sim_results/
+simulations
 
 # ignore old scripts
-scripts/scratch_scripts/
-scripts/pred_scripts/
+simulation_scripts/scratch_scripts/
+simulation_scripts/predators/
 
 # ignore project update files
 project_updates
 .Rhistory
+
+# figures
+figure_scripts/scratch

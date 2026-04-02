@@ -47,7 +47,7 @@ n_prey <- 20
 REPS <- 10
 
 #number of generations (total, not how many extra you need)
-GENS <- 8000
+GENS <- 500
 
 prey <- prey_details[[last_gen]]
 
@@ -83,7 +83,7 @@ for(G in (last_gen + 1):GENS) {
       prey_tau_p <- ctmm:::clamp(prey_tau_p, min = 0.1, max = Inf) # clamp minimum to 0 
       prey_tau_v <- sample(PREY_tau_v,1) + rnorm(1, 0, 2) # add 'mutation' based variance
       prey_tau_v <- ctmm:::clamp(prey_tau_v, min = 0.1, max = Inf) # clamp the minimum to 0
-      prey_sig <- sample(PREY_sig,1)
+      prey_sig <- prey.SIG(mass_prey)
       prey_lv <- sqrt((prey_tau_v/prey_tau_p)*prey_sig)
       
       # create ctmm model
@@ -198,15 +198,15 @@ for(G in (last_gen + 1):GENS) {
   if(length(PREY_tau_p) == 0 || length(PREY_tau_v) == 0 || length(PREY_sig) == 0){
     warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
     
-    saveRDS(prey_res, file = 'simulations/prey_results/num_patches/6800p_prey_res.Rds')
-    saveRDS(prey_details, file = 'simulations/prey_results/num_patches/6800p_prey_details.Rds')
+    saveRDS(prey_res, file = 'simulations/prey_results/patches/510p_prey_res.Rds')
+    saveRDS(prey_details, file = 'simulations/prey_results/patches/510p_prey_details.Rds')
     
     break
   }
   
   #save results
-  saveRDS(prey_res, file = 'simulations/prey_results/num_patches/6800p_prey_res.Rds')
-  saveRDS(prey_details, file = 'simulations/prey_results/num_patches/6800p_prey_details.Rds')
+  saveRDS(prey_res, file = 'simulations/prey_results/patches/510p_prey_res.Rds')
+  saveRDS(prey_details, file = 'simulations/prey_results/patches/510p_prey_details.Rds')
   
   toc(log = TRUE)
 }

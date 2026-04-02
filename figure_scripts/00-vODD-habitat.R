@@ -1,32 +1,46 @@
-
 # habitat figures for vODD
 
+#..............................................................................
+# load libraries ----
+#..............................................................................
 library(spatstat)
+library(tidyverse)
+library(gridExtra)
+library(patchwork)
+library(viridis)
 
+# load custom functions
 source("simulation_scripts/01-prey-functions.R")
+#..............................................................................
 
+# set animal body mass
 mass_prey <- 105500
 
-#comparing density
-pp1 <- makeHabitat(mass_prey,
+#...............................................................................
+# comparing density----
+#...............................................................................
+
+## sparse habitat
+p1 <- as.data.frame(
+  makeHabitat(mass_prey,
                    r = 1,
                    mu = 1,
-                   target_n = 2000,
+                   target_n = 450,
                    cal = 1)
+  )
 
-pp2 <- makeHabitat(mass_prey,
+## dense habitat
+p2 <- as.data.frame(
+  makeHabitat(mass_prey,
                    r = 1,
                    mu = 1,
-                   target_n = 50000,
+                   target_n = 1000,
                    cal = 1)
-
-
-p1 <- as.data.frame(pp1)
-p2 <- as.data.frame(pp2)
+  )
 
 plot1 <- 
   ggplot(p1, aes(x = x, y = y)) +
-  geom_point(size = 0.5, color = "#95757cff") +
+  geom_point(size = 2, color = "#B63679FF") +
   scale_x_continuous(expand = c(0,0)) + 
   scale_y_continuous(expand = c(0,0)) + 
   theme_void() +
@@ -36,7 +50,7 @@ plot1 <-
 
 plot2 <- 
   ggplot(p2, aes(x = x, y = y)) +
-  geom_point(size = 0.5, color = "#95757cff") +
+  geom_point(size = 2, color = "#B63679FF") +
   scale_x_continuous(expand = c(0,0)) + 
   scale_y_continuous(expand = c(0,0)) + 
   theme_void() +
@@ -47,19 +61,24 @@ plot2 <-
 FIG <- grid.arrange(plot1, 
                     plot2, nrow = 1)
 
-ggsave(FIG, file = "figures/maintext/method_fid_files/density.png", width = 25, height = 6, units = "in", bg = "white")
+ggsave(FIG, file = "figures/maintext/vODD_figures/density.png", width = 10, height = 5, units = "in", bg = "white")
 
-# comparing clustering
+#...............................................................................
+# comparing clustering----
+#...............................................................................
+
+# no clustering
 pp1 <- makeHabitat(mass_prey,
                    r = 1,
                    mu = 1,
-                   target_n = 2000,
+                   target_n = 500,
                    cal = 1)
 
+#max clustering
 pp2 <- makeHabitat(mass_prey,
                    r = 1,
                    mu = 200,
-                   target_n = 2000,
+                   target_n = 500,
                    cal = 1)
 
 p1 <- as.data.frame(pp1)
@@ -68,8 +87,8 @@ p2 <- as.data.frame(pp2)
 plot1 <- 
   ggplot(p1, aes(x = x, y = y)) +
   geom_raster(data = as.data.frame(density(pp1)), aes(x = x, y = y, fill = value)) +
-  geom_point(size = 1, color = "black") +
-  geom_point(size = 0.6, color = "white") +
+  geom_point(size = 2, color = "black") +
+  geom_point(size = 1.6, color = "white") +
   scale_fill_viridis_c(option = "magma") +
   scale_x_continuous(expand = c(0,0)) + 
   scale_y_continuous(expand = c(0,0)) + 
@@ -81,8 +100,8 @@ plot1 <-
 plot2 <-
   ggplot(p2, aes(x=x,y=y))+
   geom_raster(data = as.data.frame(density(pp2)), aes(x = x, y = y, fill = value)) +
-  geom_point(size = 1, color = "black") +
-  geom_point(size = 0.6, color = "white") +
+  geom_point(size = 2, color = "black") +
+  geom_point(size = 1.6, color = "white") +
   scale_fill_viridis_c(option = "magma") +
   scale_x_continuous(expand = c(0,0)) + 
   scale_y_continuous(expand = c(0,0)) + 
@@ -94,30 +113,33 @@ plot2 <-
 FIG <- grid.arrange(plot1, 
                     plot2, nrow = 1)
 
-ggsave(FIG, file = "figures/maintext/method_fid_files/clustering.png", width = 25, height = 6, units = "in", bg = "white")
+ggsave(FIG, file = "figures/maintext/vODD_figures/clustering.png", width = 10, height = 5, units = "in", bg = "white")
 
-#comparing caloric variation
-pp1 <- makeHabitat(mass_prey,
-                   r = 1,
-                   mu = 1,
-                   target_n = 1000,
-                   cal = 309)
+#...............................................................................
+#comparing caloric variation----
+#...............................................................................
 
-pp2 <- makeHabitat(mass_prey,
-                   r = 1,
-                   mu = 1,
-                   target_n = 1000,
-                   cal = 309,
-                   var = 50)
+p1 <- as.data.frame(
+  makeHabitat(mass_prey,
+               r = 1,
+               mu = 1,
+               target_n = 500,
+               cal = 4000)
+  )
 
-p1 <- as.data.frame(pp1)
-p2 <- as.data.frame(pp2)
-
+p2 <- as.data.frame(
+  makeHabitat(mass_prey,
+               r = 1,
+               mu = 1,
+               target_n = 500,
+               cal = 4000,
+               var = 50)
+  )
 
 plot1 <- 
   ggplot(p1, aes(x = x, y = y, color = marks)) +
-  geom_point(size = 1) +
-  scale_colour_scico(palette = "lipari") +
+  geom_point(size = 3) +
+  scale_color_viridis_c(option = "magma") +
   scale_x_continuous(expand = c(0,0)) + 
   scale_y_continuous(expand = c(0,0)) + 
   theme_void() +
@@ -127,16 +149,16 @@ plot1 <-
 
 plot2 <- 
   ggplot(p2, aes(x = x, y = y, color = marks)) +
-  geom_point(size = 1) +
-  scale_colour_scico(palette = "lipari") +
+  geom_point(size = 3) +
+  scale_color_viridis_c(option = "magma") +
   scale_x_continuous(expand = c(0,0)) + 
   scale_y_continuous(expand = c(0,0)) + 
+  labs(color = "Calories") +
   theme_void() +
-  theme(legend.position = "none") +
+  theme() +
   theme(panel.border = element_rect(color = "black", fill = NA, linewidth = 0.8),
         plot.margin = margin(5,5,5,5))
 
-FIG <- grid.arrange(plot1, 
-                    plot2, nrow = 1)
+FIG <- plot1 + plot2
 
-ggsave(FIG, file = "figures/maintext/method_fid_files/caloricvariance.png", width = 25, height = 6, units = "in", bg = "white")
+ggsave(FIG, file = "figures/maintext/vODD_figures/caloricvariance.png", width = 10, height = 5, units = "in", bg = "white")

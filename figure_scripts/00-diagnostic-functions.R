@@ -17,22 +17,16 @@ library(viridis) #color palette
 #----------------------------------------------------------------------
 
 simple.diag <- function(details_df) {
-  prey_summary <- details_df %>%
-    group_by(generation) %>%
-    summarise(across(where(is.numeric), ~mean(.x, na.rm = TRUE)), .groups = "drop")
-  
   p1 <- 
     ggplot() +
-    ggtitle("A") +
     geom_point(data = details_df, aes(x = generation, y = lv), 
                alpha = 0.2, color = "grey70", size = 0.1) +
-    geom_line(data = prey_summary, aes(x = generation, y = lv)) +
-    labs(y = "Ballistic Length Scale", x = "Generation") +
+    stat_summary(data = details_df, aes(x = generation, y = lv), fun = "mean", geom = "line") +
+    labs(y = expression(bold(l[v])), x = "Generation") +
     theme_bw()
   
   p5 <- 
     ggplot(details_df, aes(x = lv, y = cal_net, color = generation)) +
-    ggtitle("B") +
     geom_point(size = 0.1) +
     scale_color_viridis_c(option = "magma") +
     labs(x = expression(bold(l[v])), y = "Net calories") +
@@ -40,7 +34,6 @@ simple.diag <- function(details_df) {
   
   p6 <-
     ggplot(details_df, aes(x = speed, y = cal_net, color = generation)) +
-    ggtitle("C") +
     geom_point(size = 0.1) +
     scale_color_viridis_c(option = "magma") +
     labs(x = "Speed (m/s)", y = "Net calories") +
@@ -48,13 +41,105 @@ simple.diag <- function(details_df) {
   
   p7 <- 
     ggplot(details_df, aes(x = lv, y = speed, color = generation)) +
-    ggtitle("D") +
     geom_point(size = 0.1) +
     scale_color_viridis_c(option = "magma") +
     labs(x = expression(bold(l[v])), y = "Speed (m/s)") +
     theme_bw()
   
-  final <- p1 + p5 + p6 + p7 + plot_layout(ncol = 2)
+  p2 <-
+    ggplot() +
+    geom_point(data = details_df, aes(x = generation, y = patches), 
+               alpha = 0.2, color = "grey70", size = 0.1) +
+    stat_summary(data = details_df, aes(x = generation, y = patches), fun = "mean", geom = "line") +
+    labs(y = "Number of Patches Encountered", x = "Generation") +
+    theme_bw()
+  
+  p3 <-
+    ggplot()+
+    geom_point(data=details_df, aes(x = generation, y = offspring),
+               alpha = 0.2, color = "grey70", size = 0.1) + 
+    stat_summary(data = details_df, aes(x = generation, y = offspring), fun = "mean", geom = "line") +
+    labs(x = "Generation", y = "Offspring per Individual") +
+    theme_bw()
+  
+  
+  final <- p1 + p2 + p3 + p5 + p6 + p7 + plot_layout(ncol = 2)
 
+  return(final)
+}
+
+explore.gen <- function(details_df) {
+  p1 <- 
+    ggplot() +
+    geom_point(data = details_df, aes(x = generation, y = lv), 
+               alpha = 0.2, color = "grey70", size = 0.1) +
+    stat_summary(data = details_df, aes(x = generation, y = lv), fun = "mean", geom = "line") +
+    labs(y = expression(bold(l[v])), x = "Generation") +
+    theme_bw()
+  
+  p2 <- 
+    ggplot() +
+    geom_point(data = details_df, aes(x = generation, y = tau_v), 
+               alpha = 0.2, color = "grey70", size = 0.1) +
+    stat_summary(data = details_df, aes(x = generation, y = tau_v), fun = "mean", geom = "line") +
+    theme_bw()
+  
+  p3 <- 
+    ggplot() +
+    geom_point(data = details_df, aes(x = generation, y = tau_p), 
+               alpha = 0.2, color = "grey70", size = 0.1) +
+    stat_summary(data = details_df, aes(x = generation, y = tau_p), fun = "mean", geom = "line") +
+    theme_bw()
+  
+  p4 <- 
+    ggplot() +
+    geom_point(data = details_df, aes(x = generation, y = speed),
+               alpha = 0.2, color = "grey70", size = 0.1) +
+    stat_summary(data = details_df, aes(x = generation, y = speed), fun = "mean", geom = "line") +
+    theme_bw()
+  
+  p5 <-
+    ggplot() + 
+    geom_point(data = details_df, aes(x = generation, y = offspring)) + 
+    stat_summary(data = details_df, aes(x = generation, y = speed), fun = "mean", geom = "line") +
+    theme_bw()
+  
+  p6 <- 
+    ggplot() +
+    geom_point(data = details_df, aes(x = generation, y = patches), 
+               alpha = 0.2, color = "grey70", size = 0.1) +
+    stat_summary(data = details_df, aes(x = generation, y = patches), fun = "mean", geom = "line") +
+    labs(y = "Number of Patches Encountered", x = "Generation") +
+    theme_bw()
+  
+  final <- p1 + p2 + p3 + p4 + p5 + p6 + plot_layout(ncol = 3)
+  
+  return(final)
+}
+
+explore.var <- function(details_df) {
+  p1 <- 
+    ggplot(details_df, aes(x = lv, y = cal_net, color = generation)) +
+    geom_point(size = 0.1) +
+    scale_color_viridis_c(option = "magma") +
+    labs(x = expression(bold(l[v])), y = "Net calories") +
+    theme_bw()
+  
+  p2 <-
+    ggplot(details_df, aes(x = speed, y = cal_net, color = generation)) +
+    geom_point(size = 0.1) +
+    scale_color_viridis_c(option = "magma") +
+    labs(x = "Speed (m/s)", y = "Net calories") +
+    theme_bw()
+  
+  p3 <- 
+    ggplot(details_df, aes(x = lv, y = speed, color = generation)) +
+    geom_point(size = 0.1) +
+    scale_color_viridis_c(option = "magma") +
+    labs(x = expression(bold(l[v])), y = "Speed (m/s)") +
+    theme_bw()
+  
+  final <- p1 + p2 + p3 + plot_layout(guides = "collect", ncol = 3)
+  
   return(final)
 }

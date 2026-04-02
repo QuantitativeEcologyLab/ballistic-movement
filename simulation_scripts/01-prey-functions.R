@@ -137,7 +137,7 @@ sampling <- function(mass, x = 10) {
   
   #calculate lifespan in seconds from de Magalhaes et al (2008) https://doi.org/10.1093/gerona/62.2.149
   lifespan <- (4.88*mass^0.153) * 31536000 # years to seconds
-  time_total <- lifespan * 0.001 # 1/1000 of a lifespan
+  time_total <- lifespan * 0.001 # 1/500 of a lifespan
   
   #sampling interval (tau_v) in seconds, max prevents tau_v < 1
   #increasing x decreases interval, making sampling more frequent
@@ -205,7 +205,7 @@ makeHabitat <- function(mass,
     pp_all <- rthin(pp_all, p)
     
     if(npoints(pp_all) < target_n){
-      stop("target n greater than simulated points - resimulate")
+      stop("Target n greater than simulated points. Resimulate landscape.")
     } 
     
     #refine to exact desired

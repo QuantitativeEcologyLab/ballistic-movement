@@ -15,7 +15,7 @@ library(dplyr) # data cleaning
 source("simulation_scripts/01-prey-functions.R")
 
 #set the number of cores to use
-Ncores <- 20
+Ncores <- 6
 
 #.........................................................................
 # simulation setup ----
@@ -31,22 +31,23 @@ mass_prey <- 105500
 t <- sampling(mass_prey, x = 10)
 
 #number of individuals in arena
-n_prey <- 20
+n_prey <- 40
 
 #number of arenas
 REPS <- 10
 
 #number of generations
-GENS <- 4000
+GENS <- 500
 
-p <- round(seq(2000, 50000, length.out = 21))
+cal <- 4000
+target_n <- 500
 
 #updated food raster function
 FOOD <- makeHabitat(mass_prey,
                     r = 1,
-                    mu = 1, 
-                    target_n = 11600,
-                    cal = 100)
+                    mu = 25, 
+                    target_n = target_n,
+                    cal = cal)
 
 #check number of patches in landscape
 FOOD$n
@@ -55,7 +56,7 @@ FOOD$n
 #plot(FOOD$x, FOOD$y, pch = 16)
 
 #save the landscape
-saveRDS(FOOD, file = "simulations/prey_results/num_patches/habitats/11600_patches.Rds")
+saveRDS(FOOD, file = "simulations/prey_results/clustering/habitats/mu25_habitat.Rds")
 
 #lists for storing results
 prey_res <- list()
@@ -85,8 +86,10 @@ for(G in 1:GENS) {
       
       PREY_mods <- list()
       for(i in 1:n_prey){
-        prey_tau_p <- prey.tau_p(mass_prey, variance = TRUE)
-        prey_tau_v <- prey.tau_v(mass_prey, variance = TRUE)
+        # prey_tau_p <- prey.tau_p(mass_prey, variance = TRUE)
+        prey_tau_p <- runif(1, min = 500, max = (2 * prey.tau_p(mass_prey))) #sample across parameter space uniformly
+        # prey_tau_v <- prey.tau_v(mass_prey, variance = TRUE)
+        prey_tau_v <- runif(1, min = 1, max = (2 * prey.tau_v(mass_prey))) #sample across parameter space uniformly
         prey_sig <- prey.SIG(mass_prey)
         prey_lv <- sqrt((prey_tau_v/prey_tau_p) * prey_sig)
         
@@ -111,7 +114,8 @@ for(G in 1:GENS) {
         prey_tau_p <- ctmm:::clamp(prey_tau_p, min = 0.1, max = Inf) # clamp minimum to 0 
         prey_tau_v <- sample(PREY_tau_v,1) + rnorm(1, 0, 2) # add 'mutation' based variance
         prey_tau_v <- ctmm:::clamp(prey_tau_v, min = 0.1, max = Inf) # clamp the minimum to 0
-        prey_sig <- sample(PREY_sig,1)
+        # prey_sig <- sample(PREY_sig,1)
+        prey_sig <- prey.SIG(mass_prey) #hard code sigma so that it doesn't evolve
         prey_lv <- sqrt((prey_tau_v/prey_tau_p)*prey_sig)
         
         # create ctmm model
@@ -204,7 +208,9 @@ for(G in 1:GENS) {
                             speed = unlist(prey_speed),
                             offspring = unlist(offspring_prey),
                             mass = mass_prey,
-                            mass_update = unlist(mass_update_prey))
+                            mass_update = unlist(mass_update_prey),
+                            cal_per_patch = cal,
+                            tot_patch = target_n)
     
   } # closes loop over number of arenas
   
@@ -241,16 +247,16 @@ for(G in 1:GENS) {
     warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
     
     # save results of failed simulation
-      saveRDS(prey_res, file = 'simulations/prey_results/num_patches/11600p_prey_res.Rds')
-      saveRDS(prey_details, file = 'simulations/prey_results/num_patches/11600p_prey_details.Rds')
+      saveRDS(prey_res, file = 'simulations/prey_results/clustering/25mu_prey_res.Rds')
+      saveRDS(prey_details, file = 'simulations/prey_results/clustering/25mu_prey_details.Rds')
     
     break
     }
   
   #save results
-  saveRDS(prey_res, file = 'simulations/prey_results/num_patches/11600p_prey_res.Rds')
-  saveRDS(prey_details, file = 'simulations/prey_results/num_patches/11600p_prey_details.Rds')
-  
+  saveRDS(prey_res, file = 'simulations/prey_results/clustering/25mu_prey_res.Rds')
+  saveRDS(prey_details, file = 'simulations/prey_results/clustering/25mu_prey_details.Rds')
+
   toc(log = TRUE)
 }
 
