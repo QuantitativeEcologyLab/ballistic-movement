@@ -7,17 +7,20 @@ library(tidyverse)
 library(patchwork)
 library(scico)
 library(viridis)
+library(mgcv)
+library(gridExtra)
+
+source("simulation_scripts/01-prey-functions.R")
 
 #..............................................................................
 
-
-cmbnd <- list.files(path = "simulations/prey_results/patches", 
+patches <- list.files(path = "simulations/prey_results/patches", 
                     pattern = "prey_details\\.Rds$", 
                     full.names = TRUE)  %>% 
   map(~{
     data_list <- readRDS(.x) %>% 
       bind_rows() %>% 
-      na.omit() %>% 
+      na.omit() %>%
       group_by(tot_patch) %>% 
       filter(generation >= max(generation) - 10) %>% 
       summarise(tot_patch = mean(tot_patch),
@@ -28,97 +31,168 @@ cmbnd <- list.files(path = "simulations/prey_results/patches",
   }) %>% 
   list_rbind()
 
+# add column for labeling
+patches <- patches %>% 
+  mutate(label = case_when(
+    tot_patch == 500 ~ "label",
+    TRUE ~ "other"
+  ))
+
 #model lv
-mod_lv <- glm(mean_lv ~ tot_cal,
-              data = cmbnd, 
+patches_lv <- glm(mean_lv ~ tot_patch,
+              data = patches, 
               family = Gamma(link = "log"))
 
-New_Data_lv <- data.frame(tot_cal = seq(min(cmbnd$tot_cal) - 90000, max(cmbnd$tot_cal) + 90000, length.out = 100))
-
-#generate predictions from GLM
-preds_lv <- predict(mod_lv, newdata = New_Data_lv, type = "link", se = TRUE)
-
-New_Data_lv$fit <- exp(preds_lv$fit)
-New_Data_lv$lowerci <- exp(preds_lv$fit - preds_lv$se.fit * 1.96)
-New_Data_lv$upperci <- exp(preds_lv$fit + preds_lv$se.fit * 1.96)
+patches_lv_data <- 
+  data.frame(tot_patch = seq(min(patches$tot_patch)*0.9, max(patches$tot_patch)*1.1, length.out = 100)) %>% 
+  mutate(pred = as.data.frame(predict(patches_lv, newdata = ., type = "link", se = TRUE)),
+         fit = exp(pred$fit),
+         lowerci = exp(pred$fit - pred$se.fit * 1.96),
+         upperci = exp(pred$fit + pred$se.fit * 1.96)) %>% 
+  select(!pred)
 
 p1 <-
   ggplot() +
   ggtitle("A") +
-  geom_point(data = cmbnd, aes(x = tot_cal, y = mean_lv)) +
-  geom_ribbon(data = New_Data_lv, aes(ymin = lowerci, ymax = upperci, x = tot_cal), alpha = 0.3, fill = "#CC9BA5") +
-  geom_line(data = New_Data_lv, aes(x = tot_cal, y = fit), col = "#401D1F") +
-  labs(x = "Number of Calories in Landscape", y = expression(bold(l[v]))) +
-  scale_x_continuous(expand = c(0,0), limits = c(min(New_Data_lv$tot_cal), max(New_Data_lv$tot_cal))) +
-  scale_y_continuous(expand = c(0.01, 0.01)) +
+  geom_ribbon(data = patches_lv_data, aes(ymin = lowerci, ymax = upperci, x = tot_patch), alpha = 0.3, fill = "#CC9BA5") +
+  geom_line(data = patches_lv_data, aes(x = tot_patch, y = fit), col = "#401D1F") +
+  geom_point(data = patches, aes(x = tot_patch, y = mean_lv, col = label)) +
+  # geom_segment(aes(x = 480, y = subset(patches, tot_patch == 500)$mean_lv - 70, 
+  #                  xend = 498, yend = subset(patches, tot_patch == 500)$mean_lv - 10), 
+  #              arrow = arrow(length = unit(0.2, "cm")), col = "#0062b8") +
+  scale_color_manual(values = c("label" = "#0062b8", "other" = "grey20")) +
+  labs(x = "Number of Patches in Landscape", y = expression(bold(l[v] (m)))) +
+  scale_x_continuous(expand = c(0,0), limits = c(min(patches_lv_data$tot_patch), max(patches_lv_data$tot_patch))) +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        axis.title.y = element_text(size=8, family = "sans", face = "bold"),
-        axis.title.x = element_text(size=8, family = "sans", face = "bold"),
-        axis.text.y = element_text(size=6, family = "sans"),
-        axis.text.x  = element_text(size=6, family = "sans"),
+        panel.background = element_rect(fill = "transparent"),
+        panel.border = element_rect(fill = NA, linewidth = 1.2),
+        axis.title.y = element_text(size=9, family = "sans", face = "bold"),
+        axis.title.x = element_text(size=9, family = "sans", face = "bold"),
+        axis.text.y = element_text(size=7, family = "sans"),
+        axis.text.x  = element_text(size=7, family = "sans"),
         plot.title = element_text(hjust = -0.05, size = 10, family = "sans", face = "bold"),
         plot.background = element_rect(fill = "transparent", color = NA),
         plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm"),
-        legend.position = "right",
-        legend.text = element_text(size = 6, family = "sans"),
-        legend.title = element_text(size = 8, family = "sans", face = "bold"),
-        # legend.key.size = unit(0.2, "cm"),
-        # legend.spacing.y = unit(0.1, "cm"),
-        legend.margin = margin(0,0,0,0),
-        legend.background = element_rect(fill = "transparent", color = NA),
-        legend.key = element_rect(fill = "transparent", color = NA),
-        panel.background = element_rect(fill = "transparent"))
+        legend.position = "none")
 
-ggsave(p1, file = "figures/maintext/patches-vs-lv.png", width = 6, height = 3, units = "in", bg = "white", dpi = 600)
+# ggsave(p, file = "project_updates/26-04apr/cal-lvspeed.png", width = 6, height = 3, units = "in", bg = "white", dpi = 600)
 
 #model speed
-mod_speed <- glm(mean_speed ~ tot_cal,
-                 data = cmbnd, 
+patches_speed <- gam(mean_speed ~ 
+                       s(tot_patch, k = 3),
+                 data = patches, 
                  family = Gamma(link = "log"))
 
-New_Data_speed <- data.frame(tot_cal = seq(min(cmbnd$tot_cal) - 90000, max(cmbnd$tot_cal) + 90000, length.out = 100))
-
-#generate predictions from GLM
-preds_speed <- predict(mod_speed, newdata = New_Data_speed, type = "link", se = TRUE)
-
-New_Data_speed$fit <- exp(preds_speed$fit)
-New_Data_speed$lowerci <- exp(preds_speed$fit - preds_speed$se.fit * 1.96)
-New_Data_speed$upperci <- exp(preds_speed$fit + preds_speed$se.fit * 1.96)
+patches_speed_data <- 
+  data.frame(tot_patch = seq(min(patches$tot_patch)*0.9, max(patches$tot_patch)*1.1, length.out = 100)) %>% 
+  mutate(pred = as.data.frame(predict(patches_speed, newdata = ., type = "link", se = TRUE)),
+         fit = exp(pred$fit),
+         lowerci = exp(pred$fit - pred$se.fit * 1.96),
+         upperci = exp(pred$fit + pred$se.fit * 1.96)) %>% 
+  select(!pred)
 
 p2 <-
   ggplot() +
   ggtitle("B") +
-  geom_point(data = cmbnd, aes(x = tot_cal, y = mean_speed)) +
-  geom_ribbon(data = New_Data_speed, aes(ymin = lowerci, ymax = upperci, x = tot_cal), alpha = 0.3, fill = "#CC9BA5") +
-  geom_line(data = New_Data_speed, aes(x = tot_cal, y = fit), col = "#401D1F") +
-  labs(x = "Number of Calories in Landscape", y = "Speed (m/s)") +
-  scale_x_continuous(expand = c(0, 0), limits = c(min(New_Data_speed$tot_cal), max(New_Data_speed$tot_cal))) +
-  scale_y_continuous(expand = c(0.01, 0.01)) +
+  geom_ribbon(data = patches_speed_data, aes(ymin = lowerci, ymax = upperci, x = tot_patch), alpha = 0.3, fill = "#CC9BA5") +
+  geom_line(data = patches_speed_data, aes(x = tot_patch, y = fit), col = "#401D1F") +
+  geom_point(data = patches, aes(x = tot_patch, y = mean_speed, col = label)) +
+  # geom_segment(aes(x = 490, y = subset(patches, tot_patch == 500)$mean_speed - 0.5, 
+  #                  xend = 499, yend = subset(patches, tot_patch == 500)$mean_speed - 0.1), 
+  #              arrow = arrow(length = unit(0.2, "cm")), col = "#0062b8") +
+  scale_color_manual(values = c("label" = "#0062b8", "other" = "grey20")) +
+  labs(x = "Number of Patches in Landscape", y = "Speed (m/s)") +
+  scale_x_continuous(expand = c(0,0), limits = c(min(patches_lv_data$tot_patch), max(patches_lv_data$tot_patch))) +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        axis.title.y = element_text(size=8, family = "sans", face = "bold"),
-        axis.title.x = element_text(size=8, family = "sans", face = "bold"),
-        axis.text.y = element_text(size=6, family = "sans"),
-        axis.text.x  = element_text(size=6, family = "sans"),
+        panel.background = element_rect(fill = "transparent"),
+        panel.border = element_rect(fill = NA, linewidth = 1.2),
+        axis.title.y = element_text(size=9, family = "sans", face = "bold"),
+        axis.title.x = element_text(size=9, family = "sans", face = "bold"),
+        axis.text.y = element_text(size=7, family = "sans"),
+        axis.text.x  = element_text(size=7, family = "sans"),
         plot.title = element_text(hjust = -0.05, size = 10, family = "sans", face = "bold"),
         plot.background = element_rect(fill = "transparent", color = NA),
         plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm"),
-        legend.position = "right",
-        legend.text = element_text(size = 6, family = "sans"),
-        legend.title = element_text(size = 8, family = "sans", face = "bold"),
-        # legend.key.size = unit(0.2, "cm"),
-        # legend.spacing.y = unit(0.1, "cm"),
-        legend.margin = margin(0,0,0,0),
-        legend.background = element_rect(fill = "transparent", color = NA),
-        legend.key = element_rect(fill = "transparent", color = NA),
-        panel.background = element_rect(fill = "transparent"))
+        legend.position = "none")
 
-ggsave(p2, file = "figures/maintext/patches-vs-speed.png", width = 6, height = 3, units = "in", bg = "white", dpi = 600)
+# ggsave(p2, file = "figures/maintext/patches-vs-speed.png", width = 6, height = 3, units = "in", bg = "white", dpi = 600)
 
 #combine plots
-final <- grid.arrange(p1, p2, ncol = 2, top = textGrob("Landscape Density", gp = gpar(fontsize = 16, family = "sans", face = "bold")))
+final <- grid.arrange(p1, p2, ncol = 2)
 
-ggsave(final, file = "presentations/poster-components/figures/density-analysis.png", width = 9, height = 4, units = "in", bg = "white", dpi = 600)
+# ggsave(final, file = "presentations/poster-components/figures/density-analysis.png", width = 9, height = 4, units = "in", bg = "white", dpi = 600)
+
+
+#representative habitats
+base_food <- readRDS("simulations/prey_results/patches/habitats/500_patches.Rds")
+
+mass_prey <- 105500
+
+den <- c(250, 500, 750, 900, 1050)
+
+res <- vector("list", length(den))
+for(idx in seq_along(den)) {
+  i <- den[idx]
+  
+  if(i == 500) {
+    food <- base_food   
+  } else {
+    success <- FALSE
+    
+    set.seed(123 + idx)
+    
+    while(!success){
+      FOOD <- try({makeHabitat(mass_prey,
+                               r = 1,
+                               mu = 1,
+                               target_n = i,
+                               cal = 4000)},
+                  silent = TRUE)
+      
+      success <- !inherits(FOOD, "try-error")
+    }
+    
+    food <- as.data.frame(FOOD)
+  }
+  
+  res[[idx]] <- data.frame(x = food$x,
+                           y = food$y,
+                           target_n = i)
+}
+res <- bind_rows(res)
+
+habitats <- res %>% 
+  ggplot(aes(x = x, y = y)) +
+  geom_rect(data = filter(res, target_n == 500),
+            xmin = -Inf, xmax = Inf,
+            ymin = -Inf, ymax = Inf,
+            fill = "#ebf6ff",
+            inherit.aes = FALSE) +
+  geom_point(col = "#461300", size = 0.5) +
+  facet_wrap(~target_n, ncol = 8, labeller = as_labeller(function(x) paste(x, "patches"))) +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text.x  = element_blank(),
+        axis.ticks = element_blank(),
+        plot.title = element_text(hjust = -0.05, size = 10, family = "sans", face = "bold"),
+        plot.background = element_rect(fill = "transparent", color = NA),
+        plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm"),
+        strip.background = element_rect(fill = "white"),
+        strip.text = element_text(size = 8, family = "sans", face = "bold"),
+        panel.background = element_rect(fill = "transparent"))
+
+# ggsave(habitats, file = "presentations/poster-components/figures/habitat-density.png", width = 10, height = 1.9, units = "in", bg = "white", dpi = 600)
+
+#combine all
+FIG <- grid.arrange(habitats, final, nrow = 2, heights = c(1,2))
+
+ggsave(FIG, file = "presentations/poster-components/figures/landscape-density.png", 
+       width = 9, height = 5, units = "in", dpi = 600, bg = "white")

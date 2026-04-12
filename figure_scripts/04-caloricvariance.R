@@ -1,4 +1,4 @@
-# script for making plot of ballistic length scale vs degree of patch clustering in the habitat
+# script for making plot of ballistic length scale vs caloric distribution in the habitat
 
 #..............................................................................
 # load libraries ----
@@ -14,45 +14,39 @@ source("simulation_scripts/01-prey-functions.R")
 #..............................................................................
 
 #load data from folder
-clust <- list.files(path = "simulations/prey_results/clustering", 
+calories <- list.files(path = "simulations/prey_results/calorie-variance", 
                     pattern = "prey_details\\.Rds$", 
                     full.names = TRUE) %>% 
   map(~ {
-    #add id for clustering level from file name
-    id_val <- as.numeric(str_extract(basename(.x), "\\d+"))
-    
-    data_list <- readRDS(.x) %>% map_dfr(., ~ mutate(.x, mu = id_val))
-    
-    #summarise all the data 
-    data_list <- data_list %>%
-      group_by(mu) %>%
+    data_list <- readRDS(.x) %>% 
+      bind_rows() %>% 
+      # na.omit() %>% 
+      group_by(cal_var) %>% 
       filter(generation >= max(generation) - 10) %>% 
-      summarise(tot_patch = mean(tot_patch),
-                tot_cal = mean(tot_patch * cal_per_patch),
-                mu = mean(as.numeric(mu)),
+      summarise(cal_var = mean(cal_var),
                 mean_lv = mean(lv),
                 mean_speed = mean(speed))
-    
     return(data_list)
   }) %>%
   list_rbind()
 
 # add column for labeling
-clust <- clust %>% 
+calories <- calories %>% 
+  filter(cal_var == 0 | cal_var >= 1000) %>%
   mutate(label = case_when(
-    mu == 1 ~ "label",
+    cal_var == 0 ~ "label",
     TRUE ~ "other"
   ))
 
 #fit model to data
-clust_lv <- glm(mean_lv ~ mu,
-              data = clust, 
-              family = Gamma(link = "log"))
+calories_lv <- glm(mean_lv ~ cal_var,
+                data = calories, 
+                family = Gamma(link = "log"))
 
 #predict data from model
-clust_lv_data <- 
-  data.frame(mu = seq(min(clust$mu) - 2, max(clust$mu) + 2, length.out = 100)) %>% 
-  mutate(pred = as.data.frame(predict(clust_lv, newdata = ., type = "link", se = TRUE)),
+calories_lv_data <- 
+  data.frame(cal_var = seq(min(calories$cal_var)-1000, max(calories$cal_var)+1000, length.out = 100)) %>% 
+  mutate(pred = as.data.frame(predict(calories_lv, newdata = ., type = "link", se = TRUE)),
          fit = exp(pred$fit),
          lowerci = exp(pred$fit - pred$se.fit * 1.96),
          upperci = exp(pred$fit + pred$se.fit * 1.96)) %>% 
@@ -61,14 +55,15 @@ clust_lv_data <-
 p1 <-
   ggplot() +
   ggtitle("A") +
-  geom_ribbon(data = clust_lv_data, aes(ymin = lowerci, ymax = upperci, x = mu), alpha = 0.3, fill = "#CC9BA5") +
-  geom_line(data = clust_lv_data, aes(x = mu, y = fit), col = "#401D1F") +
-  geom_point(data = clust, aes(x = mu, y = mean_lv, col = label)) +
-  # geom_segment(aes(x = -0.5, y = subset(clust, mu == 1)$mean_lv + 50, xend = 0.7, yend = subset(clust, mu == 1)$mean_lv+10), 
+  geom_ribbon(data = calories_lv_data, aes(ymin = lowerci, ymax = upperci, x = cal_var), alpha = 0.3, fill = "#CC9BA5") +
+  geom_line(data = calories_lv_data, aes(x = cal_var, y = fit), col = "#401D1F") +
+  geom_point(data = calories, aes(x = cal_var, y = mean_lv, col = label)) +
+  # geom_segment(aes(x = 200, y = subset(calories, cal_var == 0)$mean_lv +75, 
+  #                  xend = 0.5, yend = subset(calories, cal_var == 0)$mean_lv+10), 
   #              arrow = arrow(length = unit(0.2, "cm")), col = "#0062b8") +
-  labs(x = "Degree of Clustering", y = expression(bold(l[v] (m)))) +
+  labs(x = "Caloric Variance", y = expression(bold(l[v]))) +
   scale_color_manual(values = c("label" = "#0062b8", "other" = "grey20")) +
-  scale_x_continuous(expand = c(0,0), limits = c(min(clust_lv_data$mu), max(clust_lv_data$mu))) +
+  scale_x_continuous(expand = c(0,0), limits = c(min(calories_lv_data$cal_var), max(calories_lv_data$cal_var))) +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -86,13 +81,13 @@ p1 <-
 # ggsave(p1, file = "figures/maintext/patches-vs-lv.png", width = 6, height = 3, units = "in", bg = "white", dpi = 600)
 
 #model speed
-clust_speed <- glm(mean_speed ~ mu,
-                 data = clust, 
-                 family = Gamma(link = "log"))
+calories_speed <- glm(mean_speed ~ cal_var,
+                   data = calories, 
+                   family = Gamma(link = "log"))
 
-clust_speed_data <- 
-  data.frame(mu = seq(min(clust$mu) - 2, max(clust$mu) + 2, length.out = 100)) %>% 
-  mutate(pred = as.data.frame(predict(clust_speed, newdata = ., type = "link", se = TRUE)),
+calories_speed_data <- 
+  data.frame(cal_var = seq(min(calories$cal_var)-1000, max(calories$cal_var)+1000, length.out = 100)) %>% 
+  mutate(pred = as.data.frame(predict(calories_speed, newdata = ., type = "link", se = TRUE)),
          fit = exp(pred$fit),
          lowerci = exp(pred$fit - pred$se.fit * 1.96),
          upperci = exp(pred$fit + pred$se.fit * 1.96)) %>% 
@@ -101,15 +96,15 @@ clust_speed_data <-
 p2 <-
   ggplot() +
   ggtitle("B") +
-  geom_ribbon(data = clust_speed_data, aes(ymin = lowerci, ymax = upperci, x = mu), alpha = 0.3, fill = "#CC9BA5") +
-  geom_line(data = clust_speed_data, aes(x = mu, y = fit), col = "#401D1F") +
-  geom_point(data = clust, aes(x = mu, y = mean_speed, col = label)) +
+  geom_ribbon(data = calories_speed_data, aes(ymin = lowerci, ymax = upperci, x = cal_var), alpha = 0.3, fill = "#CC9BA5") +
+  geom_line(data = calories_speed_data, aes(x = cal_var, y = fit), col = "#401D1F") +
+  geom_point(data = calories, aes(x = cal_var, y = mean_speed, col = label)) +
   scale_color_manual(values = c("label" = "#0062b8", "other" = "grey20")) +
-  # geom_segment(aes(x = 2.4, y = subset(clust, mu == 1)$mean_speed*0.95, 
-  #                  xend = 1.4, yend = subset(clust, mu == 1)$mean_speed*0.99), 
+  # geom_segment(aes(x = 200, y = subset(calories, cal_var == 0)$mean_speed*1.03, 
+  #                  xend = 0.5, yend = subset(calories, cal_var == 0)$mean_speed*1.005), 
   #              arrow = arrow(length = unit(0.2, "cm")), col = "#0062b8") +
-  labs(x = "Degree of Clustering", y = "Speed (m/s)") +
-  scale_x_continuous(expand = c(0,0), limits = c(min(clust_speed_data$mu), max(clust_speed_data$mu))) +
+  labs(x = "Caloric Variance", y = "Speed (m/s)") +
+  scale_x_continuous(expand = c(0, 0), limits = c(min(calories_speed_data$cal_var), max(calories_speed_data$cal_var))) +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -129,18 +124,18 @@ p2 <-
 #create combined plot
 final <- grid.arrange(p1, p2, ncol = 2)
 
-# ggsave(final, file = "presentations/poster-components/figures/clust-analysis.png", width = 9, height = 4, units = "in", bg = "white", dpi = 600)
+# ggsave(final, file = "presentations/poster-components/figures/calories-analysis.png", width = 9, height = 4, units = "in", bg = "white", dpi = 600)
 
-#habitat clustering
+#habitat caloriesering
 base_food <- readRDS("simulations/prey_results/patches/habitats/500_patches.Rds")
 
 mass_prey <- 105500
 
-clustvals <- c(1, 5, 13, 21, 30)
+caloriesvals <- c(0, 2500, 5000, 7500, 10000)
 
-clust_res <- vector("list", length(clustvals))
-for(idx in seq_along(clustvals)) {
-  i <- clustvals[idx]
+calories_res <- vector("list", length(caloriesvals))
+for(idx in seq_along(calories_res)) {
+  i <- caloriesvals[idx]
   
   if(i == 1) {
     food <- base_food   # <-- force identical landscape
@@ -152,7 +147,8 @@ for(idx in seq_along(clustvals)) {
     while(!success){
       FOOD <- try({makeHabitat(mass_prey,
                                r = 1,
-                               mu = i,
+                               var = i, 
+                               mu = 1,
                                target_n = 500,
                                cal = 4000)},
                   silent = TRUE)
@@ -163,23 +159,28 @@ for(idx in seq_along(clustvals)) {
     food <- as.data.frame(FOOD)
   }
   
-  clust_res[[idx]] <- data.frame(x = food$x,
+  calories_res[[idx]] <- data.frame(x = food$x,
                                     y = food$y,
-                                    mu = i)
+                                    cals = food$marks,
+                                    cal_var = i)
 }
 
-clust_res <- bind_rows(clust_res)
 
-clust_habitats <-
-  clust_res %>% 
-  ggplot(aes(x = x, y = y)) +
-  geom_rect(data = filter(clust_res, mu == 1),
+calories_res <- bind_rows(calories_res)
+
+calories_habitats <-
+  ggplot(calories_res, aes(x = x, y = y, col = cals)) +
+  geom_rect(data = filter(calories_res, cal_var == 0),
             xmin = -Inf, xmax = Inf,
             ymin = -Inf, ymax = Inf,
             fill = "#ebf6ff",
             inherit.aes = FALSE) +
-  geom_point(col = "#461300",size = 0.5) +
-  facet_wrap(~mu, ncol = 8, labeller = as_labeller(function(x) paste("Clustering Coefficient", x))) +
+  geom_point(size = 0.5) +
+  facet_wrap(~cal_var, ncol = 5, labeller = as_labeller(function(x) paste("Calorie Variance", x))) +
+  scale_color_scico(palette = "berlin",
+                    midpoint = 4000
+                    )+
+  labs(color = "Calories") +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -193,11 +194,20 @@ clust_habitats <-
         plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm"),
         strip.background = element_rect(fill = "white"),
         strip.text = element_text(size = 8, family = "sans", face = "bold"),
+        legend.position = "left",
+        legend.text = element_text(size = 4, family = "sans"),
+        legend.title = element_text(size = 6, family = "sans", face = "bold"),
+        legend.key.size = unit(0.3, "cm"),
+        legend.spacing.y = unit(0.3, "cm"),
+        legend.margin = margin(0,0,0,0),
+        legend.background = element_rect(fill = "transparent", color = NA),
+        legend.key = element_rect(fill = "transparent", color = NA),
         panel.background = element_rect(fill = "transparent"))
+  
 
-# ggsave(habitats, file = "presentations/poster-components/figures/habitat-clustering.png", width = 10, height = 1.9, units = "in", bg = "white", dpi = 600)
+# ggsave(habitats, file = "presentations/poster-components/figures/habitat-caloriesering.png", width = 10, height = 1.9, units = "in", bg = "white", dpi = 600)
 
-FIG <- grid.arrange(clust_habitats, final, nrow = 2, heights = c(1,2))
+FIG <- grid.arrange(calories_habitats, final, nrow = 2, heights = c(1,2))
 
-ggsave(FIG, file = "presentations/poster-components/figures/landscape-clustering.png", 
+ggsave(FIG, file = "presentations/poster-components/figures/landscape-calories.png", 
        width = 9, height = 5, units = "in", dpi = 600, bg = "white")
