@@ -61,7 +61,7 @@ p1 <-
   # geom_segment(aes(x = 200, y = subset(calories, cal_var == 0)$mean_lv +75, 
   #                  xend = 0.5, yend = subset(calories, cal_var == 0)$mean_lv+10), 
   #              arrow = arrow(length = unit(0.2, "cm")), col = "#0062b8") +
-  labs(x = "Caloric Variance", y = expression(bold(l[v]))) +
+  labs(x = "Caloric Variance", y = expression(bold(l[v] (m)))) +
   scale_color_manual(values = c("label" = "#0062b8", "other" = "grey20")) +
   scale_x_continuous(expand = c(0,0), limits = c(min(calories_lv_data$cal_var), max(calories_lv_data$cal_var))) +
   theme_bw() +
