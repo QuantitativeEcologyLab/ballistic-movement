@@ -53,6 +53,7 @@ rsconnect/
 
 # ignore result files and old results
 *.Rda
+*.Rds
 simulations
 
 # ignore old scripts
@@ -61,7 +62,13 @@ simulation_scripts/predators/
 
 # ignore project update files
 project_updates
-.Rhistory
 
 # figures
 figure_scripts/scratch
+figures/maintext
+
+#poster stuff
+presentations/poster-components
+
+#references
+*.bib

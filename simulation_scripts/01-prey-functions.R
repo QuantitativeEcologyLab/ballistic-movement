@@ -217,6 +217,7 @@ makeHabitat <- function(mass,
   # control CoV via gamma (defined by mean and variance)
   if (var > 0){
     vals <- rgamma2(cal, var, pp_all$n)
+    # vals <- cals * ((target_n * cal)/sum(cals))
   } else {
     vals <- rep(cal, pp_all$n)
   }

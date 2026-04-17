@@ -7,10 +7,10 @@ library(tidyverse)
 library(patchwork)
 library(scico)
 library(viridis)
-library(mgcv)
 library(gridExtra)
 
 source("simulation_scripts/01-prey-functions.R")
+
 #..............................................................................
 
 #load data from folder
@@ -55,15 +55,15 @@ calories_lv_data <-
 p1 <-
   ggplot() +
   ggtitle("A") +
-  geom_ribbon(data = calories_lv_data, aes(ymin = lowerci, ymax = upperci, x = cal_var), alpha = 0.3, fill = "#CC9BA5") +
+  geom_ribbon(data = calories_lv_data, 
+              aes(ymin = lowerci, ymax = upperci, x = cal_var), 
+              alpha = 0.3, fill = "#CC9BA5") +
   geom_line(data = calories_lv_data, aes(x = cal_var, y = fit), col = "#401D1F") +
   geom_point(data = calories, aes(x = cal_var, y = mean_lv, col = label)) +
-  # geom_segment(aes(x = 200, y = subset(calories, cal_var == 0)$mean_lv +75, 
-  #                  xend = 0.5, yend = subset(calories, cal_var == 0)$mean_lv+10), 
-  #              arrow = arrow(length = unit(0.2, "cm")), col = "#0062b8") +
   labs(x = "Caloric Variance", y = expression(bold(l[v] (m)))) +
   scale_color_manual(values = c("label" = "#0062b8", "other" = "grey20")) +
-  scale_x_continuous(expand = c(0,0), limits = c(min(calories_lv_data$cal_var), max(calories_lv_data$cal_var))) +
+  scale_x_continuous(expand = c(0,0), limits = c(min(calories_lv_data$cal_var), 
+                                                 max(calories_lv_data$cal_var))) +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -78,7 +78,8 @@ p1 <-
         plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm"),
         legend.position = "none")
 
-# ggsave(p1, file = "figures/maintext/patches-vs-lv.png", width = 6, height = 3, units = "in", bg = "white", dpi = 600)
+# ggsave(p1, file = "figures/maintext/patches-vs-lv.png", 
+#        width = 6, height = 3, units = "in", bg = "white", dpi = 600)
 
 #model speed
 calories_speed <- glm(mean_speed ~ cal_var,
@@ -96,15 +97,15 @@ calories_speed_data <-
 p2 <-
   ggplot() +
   ggtitle("B") +
-  geom_ribbon(data = calories_speed_data, aes(ymin = lowerci, ymax = upperci, x = cal_var), alpha = 0.3, fill = "#CC9BA5") +
+  geom_ribbon(data = calories_speed_data, 
+              aes(ymin = lowerci, ymax = upperci, x = cal_var), 
+              alpha = 0.3, fill = "#CC9BA5") +
   geom_line(data = calories_speed_data, aes(x = cal_var, y = fit), col = "#401D1F") +
   geom_point(data = calories, aes(x = cal_var, y = mean_speed, col = label)) +
   scale_color_manual(values = c("label" = "#0062b8", "other" = "grey20")) +
-  # geom_segment(aes(x = 200, y = subset(calories, cal_var == 0)$mean_speed*1.03, 
-  #                  xend = 0.5, yend = subset(calories, cal_var == 0)$mean_speed*1.005), 
-  #              arrow = arrow(length = unit(0.2, "cm")), col = "#0062b8") +
   labs(x = "Caloric Variance", y = "Speed (m/s)") +
-  scale_x_continuous(expand = c(0, 0), limits = c(min(calories_speed_data$cal_var), max(calories_speed_data$cal_var))) +
+  scale_x_continuous(expand = c(0, 0), limits = c(min(calories_speed_data$cal_var), 
+                                                  max(calories_speed_data$cal_var))) +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -119,14 +120,16 @@ p2 <-
         plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm"),
         legend.position = "none")
 
-# ggsave(p2, file = "figures/maintext/patches-vs-speed.png", width = 6, height = 3, units = "in", bg = "white", dpi = 600)
+# ggsave(p2, file = "figures/maintext/patches-vs-speed.png", 
+#        width = 6, height = 3, units = "in", bg = "white", dpi = 600)
 
 #create combined plot
 final <- grid.arrange(p1, p2, ncol = 2)
 
-# ggsave(final, file = "presentations/poster-components/figures/calories-analysis.png", width = 9, height = 4, units = "in", bg = "white", dpi = 600)
+ggsave(final, file = "figures/04-caloricvariance.png", 
+       width = 9, height = 4, units = "in", bg = "white", dpi = 600)
 
-#habitat caloriesering
+#habitat caloriesering for poster
 base_food <- readRDS("simulations/prey_results/patches/habitats/500_patches.Rds")
 
 mass_prey <- 105500

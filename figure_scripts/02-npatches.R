@@ -5,10 +5,9 @@
 
 library(tidyverse)
 library(patchwork)
-library(scico)
 library(viridis)
-library(mgcv)
 library(gridExtra)
+library(propagate)
 
 source("simulation_scripts/01-prey-functions.R")
 
@@ -44,7 +43,9 @@ patches_lv <- glm(mean_lv ~ tot_patch,
               family = Gamma(link = "log"))
 
 patches_lv_data <- 
-  data.frame(tot_patch = seq(min(patches$tot_patch)*0.9, max(patches$tot_patch)*1.1, length.out = 100)) %>% 
+  data.frame(tot_patch = seq(min(patches$tot_patch)+100, 
+                             max(patches$tot_patch)-100, 
+                             length.out = 100)) %>% 
   mutate(pred = as.data.frame(predict(patches_lv, newdata = ., type = "link", se = TRUE)),
          fit = exp(pred$fit),
          lowerci = exp(pred$fit - pred$se.fit * 1.96),
@@ -54,15 +55,15 @@ patches_lv_data <-
 p1 <-
   ggplot() +
   ggtitle("A") +
-  geom_ribbon(data = patches_lv_data, aes(ymin = lowerci, ymax = upperci, x = tot_patch), alpha = 0.3, fill = "#CC9BA5") +
+  geom_ribbon(data = patches_lv_data, 
+              aes(ymin = lowerci, ymax = upperci, x = tot_patch), 
+              alpha = 0.3, fill = "#CC9BA5") +
   geom_line(data = patches_lv_data, aes(x = tot_patch, y = fit), col = "#401D1F") +
   geom_point(data = patches, aes(x = tot_patch, y = mean_lv, col = label)) +
-  # geom_segment(aes(x = 480, y = subset(patches, tot_patch == 500)$mean_lv - 70, 
-  #                  xend = 498, yend = subset(patches, tot_patch == 500)$mean_lv - 10), 
-  #              arrow = arrow(length = unit(0.2, "cm")), col = "#0062b8") +
   scale_color_manual(values = c("label" = "#0062b8", "other" = "grey20")) +
   labs(x = "Number of Patches in Landscape", y = expression(bold(l[v] (m)))) +
-  scale_x_continuous(expand = c(0,0), limits = c(min(patches_lv_data$tot_patch), max(patches_lv_data$tot_patch))) +
+  scale_x_continuous(expand = c(0,0), limits = c(min(patches_lv_data$tot_patch), 
+                                                 max(patches_lv_data$tot_patch))) +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -77,34 +78,46 @@ p1 <-
         plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm"),
         legend.position = "none")
 
-# ggsave(p, file = "project_updates/26-04apr/cal-lvspeed.png", width = 6, height = 3, units = "in", bg = "white", dpi = 600)
+# ggsave(p, file = "project_updates/26-04apr/cal-lvspeed.png", 
+#        width = 6, height = 3, units = "in", bg = "white", dpi = 600)
 
-#model speed
-patches_speed <- gam(mean_speed ~ 
-                       s(tot_patch, k = 3),
-                 data = patches, 
-                 family = Gamma(link = "log"))
+# model speed
 
-patches_speed_data <- 
-  data.frame(tot_patch = seq(min(patches$tot_patch)*0.9, max(patches$tot_patch)*1.1, length.out = 100)) %>% 
-  mutate(pred = as.data.frame(predict(patches_speed, newdata = ., type = "link", se = TRUE)),
-         fit = exp(pred$fit),
-         lowerci = exp(pred$fit - pred$se.fit * 1.96),
-         upperci = exp(pred$fit + pred$se.fit * 1.96)) %>% 
-  select(!pred)
+patches_nls <- nls(mean_speed ~ (a * tot_patch) / (b + tot_patch),
+               start = list(a = 1, b = 1),
+               data = patches)
+
+#makes output silent
+suppressMessages(
+  invisible(capture.output(
+  #uses simulation to get confidence intervals
+    preds <- predictNLS(patches_nls, 
+                        newdata = data.frame(
+                                  tot_patch = 
+                                   seq(min(patches$tot_patch)-100, 
+                                       max(patches$tot_patch)+100, 
+                                       length.out = 100)))
+  )))
+
+cis <- data.frame(tot_patch = 
+                    seq(min(patches$tot_patch)-100, 
+                        max(patches$tot_patch)+100, 
+                        length.out = 100),
+                  fit = preds$summary[, "mean.1"],
+                  lowerci = preds$summary[, "2.5%"],
+                  upperci = preds$summary[, "97.5%"])
 
 p2 <-
   ggplot() +
   ggtitle("B") +
-  geom_ribbon(data = patches_speed_data, aes(ymin = lowerci, ymax = upperci, x = tot_patch), alpha = 0.3, fill = "#CC9BA5") +
-  geom_line(data = patches_speed_data, aes(x = tot_patch, y = fit), col = "#401D1F") +
+  geom_ribbon(data = cis, 
+              aes(ymin = lowerci, ymax = upperci, x = tot_patch), 
+              alpha = 0.3, fill = "#CC9BA5") +
+  geom_line(data = cis, aes(x = tot_patch, y = fit), col = "#401D1F") +
   geom_point(data = patches, aes(x = tot_patch, y = mean_speed, col = label)) +
-  # geom_segment(aes(x = 490, y = subset(patches, tot_patch == 500)$mean_speed - 0.5, 
-  #                  xend = 499, yend = subset(patches, tot_patch == 500)$mean_speed - 0.1), 
-  #              arrow = arrow(length = unit(0.2, "cm")), col = "#0062b8") +
   scale_color_manual(values = c("label" = "#0062b8", "other" = "grey20")) +
   labs(x = "Number of Patches in Landscape", y = "Speed (m/s)") +
-  scale_x_continuous(expand = c(0,0), limits = c(min(patches_lv_data$tot_patch), max(patches_lv_data$tot_patch))) +
+  scale_x_continuous(expand = c(0,0), limits = c(min(cis$tot_patch), max(cis$tot_patch))) +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -119,15 +132,16 @@ p2 <-
         plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm"),
         legend.position = "none")
 
-# ggsave(p2, file = "figures/maintext/patches-vs-speed.png", width = 6, height = 3, units = "in", bg = "white", dpi = 600)
+# ggsave(p2, file = "figures/maintext/patches-vs-speed.png", 
+#        width = 6, height = 3, units = "in", bg = "white", dpi = 600)
 
 #combine plots
 final <- grid.arrange(p1, p2, ncol = 2)
 
-# ggsave(final, file = "presentations/poster-components/figures/density-analysis.png", width = 9, height = 4, units = "in", bg = "white", dpi = 600)
+ggsave(final, file = "figures/02-npatches.png", 
+       width = 9, height = 4, units = "in", bg = "white", dpi = 600)
 
-
-#representative habitats
+#representative habitats for poster
 base_food <- readRDS("simulations/prey_results/patches/habitats/500_patches.Rds")
 
 mass_prey <- 105500
@@ -189,10 +203,11 @@ habitats <- res %>%
         strip.text = element_text(size = 8, family = "sans", face = "bold"),
         panel.background = element_rect(fill = "transparent"))
 
-# ggsave(habitats, file = "presentations/poster-components/figures/habitat-density.png", width = 10, height = 1.9, units = "in", bg = "white", dpi = 600)
+# ggsave(habitats, file = "presentations/poster-components/figures/habitat-density.png", 
+#        width = 10, height = 1.9, units = "in", bg = "white", dpi = 600)
 
 #combine all
-FIG <- grid.arrange(habitats, final, nrow = 2, heights = c(1,2))
-
-ggsave(FIG, file = "presentations/poster-components/figures/landscape-density.png", 
-       width = 9, height = 5, units = "in", dpi = 600, bg = "white")
+# FIG <- grid.arrange(habitats, final, nrow = 2, heights = c(1,2))
+# 
+# ggsave(FIG, file = "presentations/poster-components/figures/landscape-density.png", 
+#        width = 9, height = 5, units = "in", dpi = 600, bg = "white")

@@ -75,4 +75,11 @@ calories <- list.files(path = "simulations/prey_results/calorie-variance",
     
     ggsave(fig, file = paste0("project_updates/26-04apr/calorie-variance/", paste(id_val, sep = "_"), "var_genplot.png"),
            width = 14.8, height = 6.74, units = "in")
+    
+    fig2 <- readRDS(.x) %>% 
+      bind_rows() %>% 
+      explore.var()
+    
+    ggsave(fig2, file = paste0("project_updates/26-04apr/calorie-variance/", paste(id_val, sep = "_"), "var_varplot.png"),
+           width = 14.8, height = 3.4, units = "in")
   })

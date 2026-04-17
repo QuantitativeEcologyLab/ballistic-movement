@@ -41,13 +41,15 @@ GENS <- 500
 
 cal <- 4000
 target_n <- 500
+cv <- 1500
 
 #updated food raster function
 FOOD <- makeHabitat(mass_prey,
                     r = 1,
-                    mu = 25, 
+                    mu = 1, 
                     target_n = target_n,
-                    cal = cal)
+                    cal = cal,
+                    var = cv)
 
 #check number of patches in landscape
 FOOD$n
@@ -56,7 +58,7 @@ FOOD$n
 #plot(FOOD$x, FOOD$y, pch = 16)
 
 #save the landscape
-saveRDS(FOOD, file = "simulations/prey_results/clustering/habitats/mu25_habitat.Rds")
+saveRDS(FOOD, file = "simulations/prey_results/calorie-variance/habitats/1500var_habitat.Rds")
 
 #lists for storing results
 prey_res <- list()
@@ -209,7 +211,7 @@ for(G in 1:GENS) {
                             offspring = unlist(offspring_prey),
                             mass = mass_prey,
                             mass_update = unlist(mass_update_prey),
-                            cal_per_patch = cal,
+                            cal_var = cv,
                             tot_patch = target_n)
     
   } # closes loop over number of arenas
@@ -247,15 +249,15 @@ for(G in 1:GENS) {
     warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
     
     # save results of failed simulation
-      saveRDS(prey_res, file = 'simulations/prey_results/clustering/25mu_prey_res.Rds')
-      saveRDS(prey_details, file = 'simulations/prey_results/clustering/25mu_prey_details.Rds')
+      saveRDS(prey_res, file = 'simulations/prey_results/calorie-variance/1500var_prey_res.Rds')
+      saveRDS(prey_details, file = 'simulations/prey_results/calorie-variance/1500var_prey_details.Rds')
     
     break
     }
   
   #save results
-  saveRDS(prey_res, file = 'simulations/prey_results/clustering/25mu_prey_res.Rds')
-  saveRDS(prey_details, file = 'simulations/prey_results/clustering/25mu_prey_details.Rds')
+  saveRDS(prey_res, file = 'simulations/prey_results/calorie-variance/1500var_prey_res.Rds')
+  saveRDS(prey_details, file = 'simulations/prey_results/calorie-variance/1500var_prey_details.Rds')
 
   toc(log = TRUE)
 }

@@ -6,7 +6,6 @@
 
 library(tidyverse)
 library(patchwork)
-library(scico)
 library(viridis)
 
 #..............................................................................
@@ -85,6 +84,7 @@ b <-
 c <-
   ggplot() +
   ggtitle("C") +
+  geom_hline(yintercept = 0, lty = "dashed", lwd = 0.5, col = "grey70") +
   geom_point(data = details_df, aes(x = speed, y = cal_net, color = generation), size = 0.5, alpha = 0.5, stroke = NA) +
   labs(x = "Speed (m/s)", y = "Net Calories", col = "Generation") +
   scale_x_continuous(expand = c(0.01,0.01), limits = c(0, (max(details_df$speed)*0.8))) + 
@@ -110,6 +110,7 @@ c <-
 d <-
   ggplot() +
   ggtitle("D") +
+  geom_hline(yintercept = 0, lty = "dashed", lwd = 0.5, col = "grey70") +
   geom_point(data = details_df, aes(x = lv, y = cal_net, color = generation), size = 0.5, alpha = 0.5, stroke = NA) +
   geom_vline(xintercept = stablelv, lty = "dashed", col = "grey20", lwd = 0.3) +
   labs(x = expression(bold(l[v] (m))), y = "Net Calories", col = "Generation") +
@@ -132,9 +133,8 @@ d <-
         legend.key.height = unit(1.3, 'cm'),
         panel.background = element_rect(fill = "transparent"))
 
-
 FIG <- (a + b + c + d) + plot_layout(guides = "collect") & 
   theme(legend.position = "right")
 
-ggsave(FIG, file = "figures/maintext/simulation-overview.png", 
+ggsave(FIG, file = "figures/maintext/01-simoverview.png", 
        width = 9, height = 4.5, units = "in", bg = "white", dpi = 600)
