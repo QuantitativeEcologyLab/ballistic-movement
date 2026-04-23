@@ -1,12 +1,32 @@
-# A Computational Approach to Identifying Evolutionarily Stable Strategies in Mammalian Search Behaviour
+## A Computational Approach to Identifying Evolutionarily Stable Strategies in Mammalian Search Behaviour
 
 **Authors:** L. A. Terpsma, R. Martinez-Garcia, C. H. Fleming, W. F. Fagan, J. M. Calabrese, M. J. Noonan
 
-This repository contains the code supporting the results of Lynndsay Terpsma's 2025 URA Project and Honours thesis, which investigates 
-the evolutionary trends in ballistic length scale. 
-This project focuses on prey terrestrial mammals, evaluating search behaviour across environmental conditions.
+Understanding how organisms navigate their environment under landscape changes is 
+increasingly important under rapid human-induced changes, yet predictive models 
+often fail to incorporate ecological constraints which govern animal movement. This 
+study aims to investigate how mammalian movement strategies adapt to variation in resource 
+distribution using a computational approach. We developed a stochastic system, grounded 
+in allometric scaling relationships, where individual movement behaviour emerges from interaction 
+with variable resource landscapes and energetic costs, evolving over evolutionary time. 
+Our results indicate that search strategies in a population stabilise over time, with 
+emergent optima dependent on landscape composition. A fundamental trade-off between search 
+efficiency and movement speed, emerges as a result of energetic constraints. Higher resource 
+availability reduced ballistic length scale ($l_v$) (Gamma GLM: $\beta = -1.35 \times 10^{-4}$, 
+$p = 0.00448$) and increased movement speed non-linearly (Nonlinear least squares (Michaelis-Menten): 
+$a = 5.22$, $p < 0.001$, $b = 1079$, $p < 0.001$), suggesting individuals rely less on slow 
+long-distance movement when resources are energetically rich. In contrast, when resources are 
+highly clustered, we found $l_v$ decreased (Gamma GLM: $\beta = -0.00794$, $p = 0.183$), 
+along with speed (Gamma GLM: $\beta = -0.0136$, $p < 0.001$), suggesting search strategy 
+relies on maintaining position within a resource cluster.  Resource unpredictability has 
+found to have no significant effect on movement, but further investigation is warranted in 
+this domain. Overall, our findings highlight the importance of incorporating ecological 
+constraints into predictive movement models to better capture biologically plausible dynamics. 
+This framework provides a generalisable approach for predicting how environmental change may 
+influence animal movement, with potential applications in conservation planning and broader 
+relevance to understanding movement processes across various ecological systems.
 
-# Repository Contents 
+### Repository Contents 
 
 Each folder contains another README file which describes each component in greater detail. 
 
@@ -15,14 +35,14 @@ Each folder contains another README file which describes each component in great
 * `figures/` contains all figures of simulation results.
 * `presentations/` contains files used for presentation of the project, such as posters and slideshows.
 
-# Start Here
+### Start Here
 
 The below provides details on the workflow needed to reproduce simulations. The R files listed below are found in the `simulation_scripts` folder.
 
 * `01-prey-functions.R`: functions for generating prey only simulations
 * `02-prey-simulation.R`: workflow for simulating evolution of prey search behaviour over evolutionary timescales.
 
-# R Enviroment and Packages
+### R Environment and Packages
 
 Simulations, models, and generation of all figures were conducted in the R statistical package (v.4.5.2 R Core Team 2025) using the RANN (v. 2.6.2), spatstat.random (v.3.4-2), 
 spatstat.geom (v. 3.6-0), ctmm (v. 1.2.0), extraDistr (v. 1.10-0), mgcv (v. 1.9-3), tictoc (v. 1.2.1), tidyverse (v. 2.0.0), gridExtra (v. 2.3), viridis (v. 0.6.5), 
