@@ -1,4 +1,4 @@
-
+This folder contains figures that appear in the manuscript.
 * `00-vODD.png`: the visual description of the model.
 * `01-simoverview.png`: the overview of a single simulation.
 * `02-npatches.png`: the results of resource density on movement strategy.
