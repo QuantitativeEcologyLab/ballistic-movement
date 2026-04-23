@@ -163,7 +163,7 @@ for(idx in seq_along(den)) {
       FOOD <- try({makeHabitat(mass_prey,
                                r = 1,
                                mu = 1,
-                               target_n = i,
+                               n_points = i,
                                cal = 4000)},
                   silent = TRUE)
       

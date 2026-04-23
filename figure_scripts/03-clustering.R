@@ -18,7 +18,7 @@ clust <- list.files(path = "simulations/prey_results/clustering",
                     full.names = TRUE) %>% 
   map(~ {
     #add id for clustering level from file name
-    id_val <- as.numeric(str_extract(basename(.x), "\\d+"))
+    id_val <- as.numeric(str_extract(basename(.x), "\\d+\\.?\\d*"))
     
     data_list <- readRDS(.x) %>% map_dfr(., ~ mutate(.x, mu = id_val))
     
@@ -155,7 +155,7 @@ for(idx in seq_along(clustvals)) {
       FOOD <- try({makeHabitat(mass_prey,
                                r = 1,
                                mu = i,
-                               target_n = 500,
+                               n_points = 500,
                                cal = 4000)},
                   silent = TRUE)
       

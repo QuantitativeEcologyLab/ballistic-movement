@@ -33,10 +33,12 @@ calories <- list.files(path = "simulations/prey_results/calorie-variance",
 # add column for labeling
 calories <- calories %>% 
   filter(cal_var == 0 | cal_var >= 1000) %>%
-  mutate(label = case_when(
-    cal_var == 0 ~ "label",
-    TRUE ~ "other"
-  ))
+  mutate(
+    label = case_when(
+      cal_var == 0 ~ "label",
+      TRUE ~ "other"
+    ),
+    cal_var = cal_var / 4000)
 
 #fit model to data
 calories_lv <- glm(mean_lv ~ cal_var,
@@ -45,7 +47,7 @@ calories_lv <- glm(mean_lv ~ cal_var,
 
 #predict data from model
 calories_lv_data <- 
-  data.frame(cal_var = seq(min(calories$cal_var)-1000, max(calories$cal_var)+1000, length.out = 100)) %>% 
+  data.frame(cal_var = seq(min(calories$cal_var)-0.5, max(calories$cal_var)+0.5, length.out = 100)) %>% 
   mutate(pred = as.data.frame(predict(calories_lv, newdata = ., type = "link", se = TRUE)),
          fit = exp(pred$fit),
          lowerci = exp(pred$fit - pred$se.fit * 1.96),
@@ -60,7 +62,7 @@ p1 <-
               alpha = 0.3, fill = "#CC9BA5") +
   geom_line(data = calories_lv_data, aes(x = cal_var, y = fit), col = "#401D1F") +
   geom_point(data = calories, aes(x = cal_var, y = mean_lv, col = label)) +
-  labs(x = "Caloric Variance", y = expression(bold(l[v] (m)))) +
+  labs(x = "Caloric CoV", y = expression(bold(l[v] (m)))) +
   scale_color_manual(values = c("label" = "#0062b8", "other" = "grey20")) +
   scale_x_continuous(expand = c(0,0), limits = c(min(calories_lv_data$cal_var), 
                                                  max(calories_lv_data$cal_var))) +
@@ -87,7 +89,7 @@ calories_speed <- glm(mean_speed ~ cal_var,
                    family = Gamma(link = "log"))
 
 calories_speed_data <- 
-  data.frame(cal_var = seq(min(calories$cal_var)-1000, max(calories$cal_var)+1000, length.out = 100)) %>% 
+  data.frame(cal_var = seq(min(calories$cal_var)-0.5, max(calories$cal_var)+0.5, length.out = 100)) %>% 
   mutate(pred = as.data.frame(predict(calories_speed, newdata = ., type = "link", se = TRUE)),
          fit = exp(pred$fit),
          lowerci = exp(pred$fit - pred$se.fit * 1.96),
@@ -103,7 +105,7 @@ p2 <-
   geom_line(data = calories_speed_data, aes(x = cal_var, y = fit), col = "#401D1F") +
   geom_point(data = calories, aes(x = cal_var, y = mean_speed, col = label)) +
   scale_color_manual(values = c("label" = "#0062b8", "other" = "grey20")) +
-  labs(x = "Caloric Variance", y = "Speed (m/s)") +
+  labs(x = "Caloric CoV", y = "Speed (m/s)") +
   scale_x_continuous(expand = c(0, 0), limits = c(min(calories_speed_data$cal_var), 
                                                   max(calories_speed_data$cal_var))) +
   theme_bw() +
@@ -152,7 +154,7 @@ for(idx in seq_along(calories_res)) {
                                r = 1,
                                var = i, 
                                mu = 1,
-                               target_n = 500,
+                               n_points = 500,
                                cal = 4000)},
                   silent = TRUE)
       
@@ -179,7 +181,7 @@ calories_habitats <-
             fill = "#ebf6ff",
             inherit.aes = FALSE) +
   geom_point(size = 0.5) +
-  facet_wrap(~cal_var, ncol = 5, labeller = as_labeller(function(x) paste("Calorie Variance", x))) +
+  facet_wrap(~cal_var, ncol = 5, labeller = as_labeller(function(x) paste("Calorie CoV", x))) +
   scale_color_scico(palette = "berlin",
                     midpoint = 4000
                     )+

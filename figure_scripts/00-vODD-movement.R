@@ -23,7 +23,7 @@ sig <- prey.SIG(mass)
 mod <- ctmm(tau = c(tau_p, tau_v), mu = c(0,0), sigma = sig)
 
 lifespan <- (4.88*mass^0.153) * 31536000 # years to seconds
-time_total <- lifespan # 1/500 of a lifespan
+time_total <- lifespan * 0.002 # 1/500 of a lifespan
 
 #sampling interval (tau_v) in seconds, max prevents tau_v < 1
 #increasing x decreases interval, making sampling more frequent
@@ -43,6 +43,8 @@ food <- makeHabitat(mass,
 
 track <- simulate(mod, t = t)
 
+## start here if using pre-saved landscape and track
+
 feed <- grazing(mass, track, food)
 
 consumed <- attr(feed, "consumed")
@@ -55,14 +57,14 @@ food_df <- data.frame(x = food$x, y = food$y, consumed = consumed$consumed)
 
 track_df <- data.frame(track)
 
-#p1 <-
+p1 <-
   ggplot() +
-  geom_point(data = food_df, aes(x = x, y = y, colour = consumed), size = 1.3, alpha = 0.6, stroke = NA) +
+  geom_point(data = food_df, aes(x = x, y = y, colour = consumed), size = 1.3, alpha = 1, stroke = NA) +
   scale_color_manual(values = c("TRUE" = "#e18297", "FALSE" = "#2a3b2b")) +
   geom_path(data = track_df, aes(x=x, y=y), color = "black", linewidth = 0.4, alpha = 0.9) +
   labs(color = "Consumed") +
-  # xlim(-1500,4000) +
-  # ylim(-5000,1000) +
+  xlim(-1500,4000) +
+  ylim(-5000,1000) +
   coord_equal() +
   theme_void() +
   theme(legend.position = "none")

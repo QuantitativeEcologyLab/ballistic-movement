@@ -100,7 +100,6 @@ c <-
         legend.key = element_rect(fill = "transparent", color = NA),
         panel.background = element_rect(fill = "transparent"))
 
+FIG <- (b + c) + plot_layout(ncol = 1, guides = "collect")
 
-FIG <- (b + c) + plot_layout(guides = "collect")
-
-ggsave(FIG, file = "figures/maintext/vODD_figures/move-opt.png", width = 6.5, height = 2.5, units = "in", bg = "white", dpi = 600)
+ggsave(FIG, file = "figures/maintext/vODD/components/move-opt.png", width = 4, height = 3.5, units = "in", bg = "white", dpi = 600)

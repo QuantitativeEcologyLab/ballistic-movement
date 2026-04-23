@@ -161,10 +161,10 @@ sampling <- function(mass, x = 10) {
 #.........................................................................
 
 makeHabitat <- function(mass, 
-                        r, 
+                        r = 1, 
                         mu, 
                         var = 0,
-                        target_n = NULL,
+                        n_points = NULL,
                         cal = 1,
                         tile_size = 500){
   sig <- prey.SIG(mass)
@@ -172,7 +172,7 @@ makeHabitat <- function(mass,
   win <- owin(c(-EXT, EXT), c(-EXT, EXT))
   
   # intensity = total points / area
-  lambda <- target_n / area.owin(win)
+  lambda <- n_points / area.owin(win)
   
   # number parents = intensity / mean number offspring
   kappa <- lambda/mu
@@ -199,25 +199,25 @@ makeHabitat <- function(mass,
   pp_all <- do.call(superimpose, pts_list)
   pp_all[win]
   
-  if(!is.null(target_n)){
+  if(!is.null(n_points)){
     N <- npoints(pp_all)
-    p <- target_n/N*1.01 #thin to slightly over desired points
+    p <- n_points/N*1.01 #thin to slightly over desired points
     pp_all <- rthin(pp_all, p)
     
-    if(npoints(pp_all) < target_n){
+    if(npoints(pp_all) < n_points){
       stop("Target n greater than simulated points. Resimulate landscape.")
     } 
     
     #refine to exact desired
-    if(npoints(pp_all) > target_n){
-      pp_all <- pp_all[sample.int(npoints(pp_all), target_n)]
+    if(npoints(pp_all) > n_points){
+      pp_all <- pp_all[sample.int(npoints(pp_all), n_points)]
     }
   }
   
   # control CoV via gamma (defined by mean and variance)
   if (var > 0){
     vals <- rgamma2(cal, var, pp_all$n)
-    # vals <- cals * ((target_n * cal)/sum(cals))
+    # vals <- cals * ((n_points * cal)/sum(cals))
   } else {
     vals <- rep(cal, pp_all$n)
   }

@@ -3,8 +3,8 @@
 **Authors:** L. A. Terpsma, R. Martinez-Garcia, C. H. Fleming, W. F. Fagan, J. M. Calabrese, M. J. Noonan
 
 This repository contains the code supporting the results of Lynndsay Terpsma's 2025 URA Project and Honours thesis, which investigates 
-the evolutionary trends in ballistic length scale under spatial and richness variation in landscape resources. 
-This project focuses on prey terrestrial mammals, evaluating behaviour across the body mass spectrum. 
+the evolutionary trends in ballistic length scale. 
+This project focuses on prey terrestrial mammals, evaluating search behaviour across environmental conditions.
 
 # Repository Contents 
 
@@ -25,7 +25,11 @@ The below provides details on the workflow needed to reproduce simulations. The 
 # R Enviroment and Packages
 
 Simulations, models, and generation of all figures were conducted in the R statistical package (v.4.5.2 R Core Team 2025) using the RANN (v. 2.6.2), spatstat.random (v.3.4-2), 
-spatstat.geom (v. 3.6-0), ctmm (v. 1.2.0), extraDistr (v. 1.10-0), mgcv (v. 1.9-3), tictoc (v. 1.2.1), tidyverse (v. 2.0.0) packages. 
+spatstat.geom (v. 3.6-0), ctmm (v. 1.2.0), extraDistr (v. 1.10-0), mgcv (v. 1.9-3), tictoc (v. 1.2.1), tidyverse (v. 2.0.0), gridExtra (v. 2.3), viridis (v. 0.6.5), 
+propagate (v. 1.1-0), patchwork (v. 1.3.2), and scico (v. 1.5.0.9000) packages. 
+
+Auguie B (2017). _gridExtra: Miscellaneous Functions for "Grid" Graphics_. doi:10.32614/CRAN.package.gridExtra
+<https://doi.org/10.32614/CRAN.package.gridExtra>, R package version 2.3, <https://CRAN.R-project.org/package=gridExtra>.
 
 Baddeley A, Rubak E, Turner R (2015). _Spatial Point Patterns: Methodology and Applications with R_. Chapman and Hall/CRC Press, London. ISBN 9781482210200,
 <https://www.routledge.com/Spatial-Point-Patterns-Methodology-and-Applications-with-R/Baddeley-Rubak-Turner/p/book/9781482210200/>.
@@ -38,6 +42,17 @@ Izrailev S (2024). _tictoc: Functions for Timing R Scripts, as Well as Implement
 
 Jefferis G, Kemp SE, Arya S, Mount D (2024). _RANN: Fast Nearest Neighbour Search (Wraps ANN Library) Using L2 Metric_. doi:10.32614/CRAN.package.RANN
 <https://doi.org/10.32614/CRAN.package.RANN>, R package version 2.6.2, <https://CRAN.R-project.org/package=RANN>.
+
+Pedersen T, Crameri F (2025). _scico: Colour Palettes Based on the Scientific Colour-Maps_. R package version 1.5.0.9000, commit
+e94d08c334c8de7ba5dd0c405baeb578a5d2651c, <https://github.com/thomasp85/scico>.
+
+Pedersen T (2025). _patchwork: The Composer of Plots_. doi:10.32614/CRAN.package.patchwork
+<https://doi.org/10.32614/CRAN.package.patchwork>, R package version 1.3.2, <https://CRAN.R-project.org/package=patchwork>.
+
+Simon Garnier, Noam Ross, Robert Rudis, Antônio P. Camargo, Marco Sciaini, and Cédric Scherer (2024). viridis(Lite) - Colorblind-Friendly Color Maps for R. viridis package version 0.6.5.
+
+Spiess A (2026). _propagate: Propagation of Uncertainty_. doi:10.32614/CRAN.package.propagate
+  <https://doi.org/10.32614/CRAN.package.propagate>, R package version 1.1-0, <https://CRAN.R-project.org/package=propagate>.
 
 Wickham H, Averick M, Bryan J, Chang W, McGowan LD, François R, Grolemund G, Hayes A, Henry L, Hester J, Kuhn M, Pedersen TL, Miller E, Bache SM, Müller K, Ooms J,
 Robinson D, Seidel DP, Spinu V, Takahashi K, Vaughan D, Wilke C, Woo K, Yutani H (2019). “Welcome to the tidyverse.” _Journal of Open Source Software_, *4*(43), 1686.

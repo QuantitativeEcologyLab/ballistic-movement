@@ -16,7 +16,7 @@ source("figure_scripts/00-diagnostic-functions.R")
 #..............................................................................
 
 #load in your data
-details_df <- bind_rows(readRDS("simulations/prey_results/calorie-variance/10000var_prey_details.Rds"))
+details_df <- bind_rows(readRDS("simulations/prey_results/clustering/20.5mu_prey_details.Rds"))
 
 #p1 <-
   explore.gen(details_df)

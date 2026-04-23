@@ -16,7 +16,6 @@ library(paletteer)
 
 #source the functions (ensure 'functions.R' is available in the working directory)
 source("simulation_scripts/01-prey-functions.R")
-source("figure_scripts/01-custom-ggplot-theme.R")
 
 #..........................................................................
 # create function for sensitivity analysis  -------------------------------
@@ -79,8 +78,10 @@ mass_prey <- 105500
 food <- makeHabitat(mass_prey,
                     r = 1,
                     mu = 1, 
-                    target_n = 50000,
+                    target_n = 500,
                     cal = 1)
+
+save(food, file = "simulations/sensitivity/sampling-int-habitat.Rda")
 
 #set model for simulation
 tau_p <- prey.tau_p(mass_prey)
@@ -163,9 +164,9 @@ interval_res <- interval_res %>%
   facet_grid(seed ~ .) +
   geom_smooth(aes(color = seed), method = 'gam', formula = y ~s(x)) +
   labs(y = "Patches visited", x = expression(bold(log2("Sampling Interval")))) +
-  geom_vline(xintercept = log2(tau_v/min(interval_res$x_95))) +
+  geom_vline(xintercept = log2(10)) +
   scale_color_paletteer_d("ggsci::nrc_npg") +
-  theme.qel() +
+  theme_bw() +
   theme(strip.text.y = element_blank()) #removes facet_grid labels
 
 ggsave(p, file = "figures/sensitivity/samplingint_105500g.png",  width = 6, height = 4.5, units = "in", dpi = 600, bg = "white")

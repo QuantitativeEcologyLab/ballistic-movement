@@ -1,0 +1,207 @@
+---
+title: \large A Computational Approach to Identifying Evolutionarily Stable Strategies
+  in Mammalian Search Behaviour
+subtitle: 'Supplementary Material B: Sampling Intervals'
+author:
+  - name: Lynndsay A. Terpsma
+    institute: [biol, braes]
+  - name: Ricardo Martinez-Garcia
+    institute: [casus, ctp, usp]
+  - name: Christen H. Fleming
+    institute: [ucf]
+  - name: William F. Fagan
+    institute: [umd]
+  - name: Justin M. Calabrese
+    institute: [casus, umd, ufz]
+  - name: Michael J. Noonan
+    institute: [biol, braes, cmps]
+institute:
+  - biol: Department of Biology, The University of British Columbia Okanagan, Kelowna, British Columbia, Canada.
+  - braes: Okanagan Institute for Biodiversity, Resilience, and Ecosystem Services, The University of British Columbia Okanagan, Kelowna, British Columbia, Canada.
+  - casus: Center for Advanced Systems Understanding (CASUS) – Helmholtz-Zentrum Dresden-Rossendorf (HZDR), Untermarkt 20, Görlitz 02826, Germany
+  - ctp: CTP South American Institute for Fundamental Research \& Instituto de Física Téorica, Universidade Estadual Paulista - UNESP, São Paulo SP, Brazil
+  - usp: Department of Ecology, Institute of Biosciences, University of São Paulo, São Paulo, R. do Matão, 321 - Butantã, 05508-090 , São Paulo, Brazil
+  - ucf: Department of Biology, University of Central Florida, Orlando, Florida, United States.
+  - umd: Department of Biology, University of Maryland, Maryland, USA
+  - ufz: Department of Ecological Modelling, Helmholtz Centre for Environmental Research — UFZ, Leipzig, Germany
+  - cmps: Department of Computer Science, Math, Physics, and Statistics, The University of British Columbia Okanagan, Kelowna, British Columbia, Canada.
+fontsize: 12pt
+header-includes:
+  - \usepackage{placeins}
+  - \usepackage{setspace}\doublespacing
+  - \usepackage[small]{titlesec}
+  - \usepackage{caption}
+  - \captionsetup[figure]{font=scriptsize}
+  - \usepackage{etoolbox}
+  - \makeatletter
+  - \patchcmd{\@maketitle}{\begin{center}}{\begin{center}\singlespacing}{}{}
+subparagraph: true
+output:
+  bookdown::pdf_document2:
+    toc: false
+    pandoc_args:
+      - '--lua-filter=scholarly-metadata.lua' # for author affiliations
+      - '--lua-filter=author-info-blocks.lua' # for author affiliations
+editor_options: 
+  chunk_output_type: console
+---
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(
+  root.dir = '~/hdrive/GitHub/ballistic-movement',
+  echo = FALSE,
+  cache = FALSE
+)
+#prevent figures from floating
+knitr::knit_hooks$set(plot = function(x, options) {
+  paste0(knitr::hook_plot_tex(x, options), "\n\\FloatBarrier\n")
+})
+source('~/hdrive/GitHub/ballistic-movement/simulation_scripts/01-prey-functions.R') #custom functions for simulation model
+library(tidyverse)
+library(mgcv) # for gam model
+library(kableExtra)
+library(paletteer)
+```
+
+
+```{r xtr func, include = FALSE}
+# custom function for drawing circles on raster figures to mark the home range area
+circleFun <- function(center = c(0,0),diameter = 1, npoints = 100){
+  r = diameter / 2
+  tt <- seq(0,2*pi,length.out = npoints)
+  xx <- center[1] + r * cos(tt)
+  yy <- center[2] + r * sin(tt)
+  return(data.frame(x = xx, y = yy))
+}
+```
+
+### Effect of the sampling frequency {-}
+
+The sampling frequency was calculated as the the rounded velocity autocorrelation ($\tau_v$) divided by factor $x$. 200 values of $x$ from 0.5 to 100 were sampled. We used a body mass of 105.5kg (105500g) on a landscape with 500 patches, no clustering, and no caloric variance. We then generated three movement paths (using seeds 1, 2, and 3), from the same movement model, to ensure consistency of the patch visits.  
+
+To determine a reasonable sampling interval, we fit a Generalized Additive Model (GAM) to the data and calculated the $x$ necessary to reach 95% of the maximum patch visits recorded. The results of this analysis showed inconsistent results directly at the 95% interval, such that a sampling interval of approximately 38 seconds was choosen to be well ahead of the 95% mark. This corresponds with a $x$ value of 10, thus the sampling interval used for subsequent tests was determined to be $\frac{1}{10}\tau_v$. The results of this GAM model were used to determine the sampling interval. Figure 1 shows the results of a GAM model created with the `geom_smooth()` function from the `ggplot2` package.
+
+In addition, we have included the three movement tracks used to generate this data, overlaid on the full landscape used, in Figure 2. 
+
+```{r, fig.cap = "The proportion of patch visits detected as a function of sampling interval chosen, grouped by their seed. The coloured lines show the estimated relationship based on a Generalized Additive Model fit using the \\texttt{geom\\_smooth()} function from the \\texttt{ggplot2} package. The solid vertical line shows sampling interval of 38 seconds, corresponding to $x$ equal to 10. The dashed vertical line shows the interval to reach 95% of encounters across seeds.", fig.height=4}
+
+load('~/hdrive/GitHub/ballistic-movement/simulations/sensitivity/sampling-int-res.Rda')
+interval_res <- interval_res %>% 
+  group_by(seed) %>% 
+  mutate(frac = patches / max(patches), 
+         interval_95 = max(interval[frac >= 1]), 
+         x_95 = x[interval == interval_95],#calculate the proportion of encounters with patches
+         seed = as.factor(seed))
+
+interval_choosen <- prey.tau_v(105500) / 10 #choose x = 10 for simulations
+
+# interval <-
+ggplot(interval_res, aes(x = log2(interval), y = frac)) + #log2 to show the effect of doubling the sampling interval
+  geom_point(size = 1.5, alpha = 0.7) +
+  scale_x_continuous(labels = function(x)2^x) +
+  facet_grid(seed ~ .) +
+  geom_smooth(aes(color = seed), method = 'gam', formula = y ~s(x)) +
+  scale_color_paletteer_d("ggsci::nrc_npg") +
+  labs(y = "Patches visited", x = expression(bold(log2("Sampling Interval")))) +
+  geom_vline(xintercept = log2(interval_choosen)) +
+  geom_vline(xintercept = log2(min(interval_res$interval_95)), lty = "dashed") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent"),
+        panel.border = element_rect(fill = NA, linewidth = 1.2),
+        axis.title.y = element_text(size=9, family = "sans", face = "bold"),
+        axis.title.x = element_text(size=9, family = "sans", face = "bold"),
+        axis.text.y = element_text(size=7, family = "sans"),
+        axis.text.x  = element_text(size=7, family = "sans"),
+        plot.title = element_text(hjust = -0.05, size = 10, family = "sans", face = "bold"),
+        plot.background = element_rect(fill = "transparent", color = NA),
+        plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm"),
+        strip.background = element_rect(fill = "white"),
+        strip.text = element_text(size = 8, family = "sans", face = "bold"),
+        strip.text.y = element_blank(),
+        legend.position = "right",
+        legend.text = element_text(size = 4, family = "sans"),
+        legend.title = element_text(size = 6, family = "sans", face = "bold"),
+        legend.key.size = unit(0.3, "cm"),
+        legend.spacing.y = unit(0.3, "cm"),
+        legend.margin = margin(0,0,0,0),
+        legend.background = element_blank(),
+        legend.key = element_rect(fill = "transparent", color = NA)
+        )
+```
+
+
+```{r, fig.cap = "Full movement tracks and consumed patches for each seed of the analysis, prior to being thinned. Patches are coloured by their consumption status. The yellow circle represents the 95% home range area. Tracks are labelled by their seed."}
+mass_int <- 105500
+#load landscape
+load("~/hdrive/GitHub/ballistic-movement/simulations/sensitivity/sampling-int-habitat.Rda")
+
+#load tracks
+load('~/hdrive/GitHub/ballistic-movement/simulations/sensitivity/sampling-int-tracks.Rda')
+tracks <- split(tracks_comb, tracks_comb$seed)
+
+HR <- round(sqrt((-2*log(0.05)*pi)*prey.SIG(mass_int)))
+HR_area <- circleFun(diameter = 2*HR)
+
+# Create a list to store the results for each seed
+food_df_list <- list()
+
+# Loop through each seed's data
+for (i in 1:length(tracks)) {
+  # Get the consumed data for this seed
+  seed_data <- tracks[[i]]
+  
+  # Apply grazing function to each seed's tracks
+  feed <- grazing(mass_int, seed_data, food)
+  
+  # Extract the consumed patches for this seed and store it
+  consumed <- attr(feed, "consumed")
+  consumed <- data.frame(id = rownames(consumed), consumed = consumed)
+  
+  # Create a data frame with food locations and the consumed status
+  food_df <- data.frame(x = food$x, y = food$y, consumed = consumed$consumed)
+  
+  # Ensure seed information is correctly assigned
+  food_df$seed <- rep(unique(seed_data$seed), nrow(food_df))  # Add the correct seed for each food patch
+  
+  # Store the food data frame for each seed
+  food_df_list[[i]] <- food_df
+}
+
+# Combine all the food data frames
+food_df_combined <- bind_rows(food_df_list)
+
+ggplot() +
+  geom_polygon(dat = HR_area, aes(x, y), fill = "goldenrod", alpha = 0.2) +
+  geom_point(data = food_df_combined, aes(x = x, y = y, color = as.factor(consumed)), 
+             size = 1, alpha = 1, stroke = NA) +  
+  scale_color_manual(values = c("TRUE" = "#e18297", "FALSE" = "#2a3b2b"), name = "Consumed", labels = c("Not Consumed", "Consumed")) +
+  geom_path(data = tracks_comb, aes(x = x, y = y), 
+            color = "grey3", lwd = 0.4, alpha = 0.7) + 
+  facet_wrap(~seed) + 
+  coord_equal() +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text.x  = element_blank(),
+        axis.ticks = element_blank(),
+        plot.title = element_text(hjust = -0.05, size = 10, family = "sans", face = "bold"),
+        plot.background = element_rect(fill = "transparent", color = NA),
+        plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm"),
+        strip.background = element_rect(fill = "white"),
+        strip.text = element_text(size = 8, family = "sans", face = "bold"),
+        legend.position = "left",
+        legend.text = element_text(size = 4, family = "sans"),
+        legend.title = element_text(size = 6, family = "sans", face = "bold"),
+        legend.key.size = unit(0.3, "cm"),
+        legend.spacing.y = unit(0.3, "cm"),
+        legend.margin = margin(0,0,0,0),
+        legend.background = element_rect(fill = "transparent", color = NA),
+        legend.key = element_rect(fill = "transparent", color = NA),
+        panel.background = element_rect(fill = "transparent"))
+```
+
+
