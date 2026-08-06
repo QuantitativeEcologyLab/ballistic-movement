@@ -1,10 +1,7 @@
 # This script generates the functions necessary for carrying out the 
 # prey simulation study aimed at exploring the evolution of ballistic motion
 
-
-#Written by Michael Noonan and Lynndsay Terpsma
-
-#Last updated: December 16, 2025
+# Written by Michael Noonan and Lynndsay Terpsma
 
 #.........................................................................
 # Package import
@@ -137,7 +134,7 @@ sampling <- function(mass, x = 10) {
   
   #calculate lifespan in seconds from de Magalhaes et al (2008) https://doi.org/10.1093/gerona/62.2.149
   lifespan <- (4.88*mass^0.153) * 31536000 # years to seconds
-  time_total <- lifespan * 0.001 # 1/500 of a lifespan
+  time_total <- lifespan * 0.001 # 1/1000 of a lifespan
   
   #sampling interval (tau_v) in seconds, max prevents tau_v < 1
   #increasing x decreases interval, making sampling more frequent
@@ -163,10 +160,24 @@ sampling <- function(mass, x = 10) {
 makeHabitat <- function(mass, 
                         r = 1, 
                         mu, 
-                        var = 0,
+                        cv = 0, 
                         n_points = NULL,
                         cal = 1,
-                        tile_size = 500){
+                        tile_size = 500,
+                        seed = NULL){
+  
+  # ensure the seed is properly set for reproducible landscapes
+  # ensures reproducibility without relying on the main simulation script
+  if (!is.null(seed)) {
+    if (exists(".Random.seed", envir = .GlobalEnv)) {
+      old_seed <- get(".Random.seed", envir = .GlobalEnv) # if seed is in env save it as old_seed
+      on.exit(assign(".Random.seed", old_seed, envir = .GlobalEnv), add = TRUE) # once the function finishes, return env to old_seed
+    } else { 
+      on.exit(rm(".Random.seed", envir = .GlobalEnv), add = TRUE) # if there isn't a seed, remove this function's seed once it's done
+    }
+    set.seed(seed) # set the seed
+  }
+  
   sig <- prey.SIG(mass)
   EXT <- round(sqrt((-2*log10(0.001)*pi)*sig))
   win <- owin(c(-EXT, EXT), c(-EXT, EXT))
@@ -214,10 +225,14 @@ makeHabitat <- function(mass,
     }
   }
   
-  # control CoV via gamma (defined by mean and variance)
-  if (var > 0){
-    vals <- rgamma2(cal, var, pp_all$n)
-    # vals <- cals * ((n_points * cal)/sum(cals))
+  # use uniform distribution to define caloric spread
+  # cv = 1.0 will give min = 0 and max = 2 * mean
+  if (cv > 0){
+    half_width <- cal * cv
+    # when cv > 1.0, cap the lower bound to 0
+    min <- max(0, cal - half_width) #allows the max to extend past 2*mean without negatives
+    max <- cal + half_width
+    vals <- runif(n_points, min = min, max = max)
   } else {
     vals <- rep(cal, pp_all$n)
   }
@@ -231,7 +246,12 @@ makeHabitat <- function(mass,
 # grazing function optimized for point process habitat ----
 #.........................................................................
 
-grazing <- function(mass, track, habitat){
+grazing <- function(mass, 
+                    track, 
+                    habitat, 
+                    k = 10, #how many neighbours to detect
+                    max_per_step = 10 #how many patches to consume
+                    ){
 
   pr <- sqrt(prey.SIG(mass))*0.05
   
@@ -247,7 +267,8 @@ grazing <- function(mass, track, habitat){
     data = hab_mat,
     query = track_mat,
     searchtype = "radius",
-    radius = pr
+    radius = pr,
+    k = k
   )
   
   for (t in seq_len(nrow(track_mat))){
@@ -256,11 +277,15 @@ grazing <- function(mass, track, habitat){
     
     if(ids[1] == 0) next
     
+    consumed_this_step <- 0
+    
     for(id in ids) {
       if(id == 0) break
+      if(consumed_this_step >= max_per_step) break
       if(!consumed[id]) {
         calories <- calories + marks_vec[id]
         consumed[id] <- TRUE
+        consumed_this_step <- consumed_this_step + 1
       }
     }
   }
