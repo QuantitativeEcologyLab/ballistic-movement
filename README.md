@@ -34,6 +34,7 @@ Each folder contains another README file which describes each component in great
 * `figure_scripts/` contains functions and scripts necessary to create all figures presented in the figures folder.
 * `figures/` contains all figures of simulation results.
 * `presentations/` contains files used for presentation of the project, such as posters and slideshows.
+* `writing/` contains the manuscript and supplementary materials.
 
 ### Start Here
 
