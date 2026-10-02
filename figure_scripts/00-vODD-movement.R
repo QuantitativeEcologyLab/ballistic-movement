@@ -59,18 +59,29 @@ track_df <- data.frame(track)
 
 p1 <-
   ggplot() +
-  geom_point(data = food_df, aes(x = x, y = y, colour = consumed), size = 1.3, alpha = 1, stroke = NA) +
-  scale_color_manual(values = c("TRUE" = "#e18297", "FALSE" = "#2a3b2b")) +
-  geom_path(data = track_df, aes(x=x, y=y), color = "black", linewidth = 0.4, alpha = 0.9) +
-  labs(color = "Consumed") +
-  xlim(-1500,4000) +
-  ylim(-5000,1000) +
-  coord_equal() +
-  theme_void() +
-  theme(legend.position = "none")
+    geom_path(data = track_df, aes(x = x, y = y), color = "black", linewidth = 0.4, alpha = 0.8) +
+    geom_point(data = food_df, aes(x = x, y = y, colour = consumed), size = 1.3, alpha = 1, stroke = NA) +
+    scale_color_manual(values = c("TRUE" = "#e18297", "FALSE" = "#2a3b2b")) +
+    labs(color = "Consumed") +
+    xlim(-1500,4000) +
+    ylim(-4500,1000) +
+    coord_equal() +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.background = element_rect(fill = "transparent"),
+          panel.border = element_rect(fill = NA, linewidth = 1.2),
+          axis.title.y = element_text(size=9, family = "sans", face = "bold"),
+          axis.title.x = element_text(size=9, family = "sans", face = "bold"),
+          axis.text.y = element_text(size=7, family = "sans"),
+          axis.text.x  = element_text(size=7, family = "sans"),
+          plot.title = element_text(hjust = -0.05, size = 10, family = "sans", face = "bold"),
+          plot.background = element_rect(fill = "transparent", color = NA),
+          plot.margin = unit(c(0.2,0.2,0.2,0.2), "cm"),
+          legend.position = "none")
 
 
-ggsave(p1, file = "figures/maintext/vODD/components/movetrack.png", width = 3, height = 3, units = "in", bg = "transparent", dpi = 600)
+ggsave(p1, file = "figures/ODD/foraging.png", width = 3, height = 3, units = "in", bg = "transparent", dpi = 600)
 
 saveRDS(track, file = "figures/maintext/method_fig_files/track.Rds")
 saveRDS(food, file = "figures/maintext/method_fig_files/food.Rds")

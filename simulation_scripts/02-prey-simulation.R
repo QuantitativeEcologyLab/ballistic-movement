@@ -21,9 +21,6 @@ Ncores <- 6
 # simulation setup ----
 #.........................................................................
 
-#calculate what masses are used for the analysis of prey individuals
-# masses <- seq(500, 200000, length.out = 20)
-
 # Prey mass (g)
 mass_prey <- 105500
 
@@ -39,17 +36,23 @@ REPS <- 10
 #number of generations
 GENS <- 500
 
+#grazing parameters
+k <- 10 # how many closest patches to calculate (within perceptual range)
+max_per_step <- 10 # how many patches can an individual consume in one time step
+
+#landscape parameters
 cal <- 4000
 target_n <- 500
-mu <- 1.5
-cv <- 0
-
+mu <- 1
+cv <- 1.1
+  
 #updated food raster function
 FOOD <- makeHabitat(mass_prey,
                     mu = mu, 
                     n_points = target_n,
                     cal = cal,
-                    var = cv)
+                    cv = cv,
+                    seed = 123)
 
 #check number of patches in landscape
 FOOD$n
@@ -58,7 +61,7 @@ FOOD$n
 #plot(FOOD$x, FOOD$y, pch = 16)
 
 #save the landscape
-saveRDS(FOOD, file = "simulations/prey_results/clustering/habitats/mu1.5.Rds")
+saveRDS(FOOD, file = "simulations/sensitivity/variance/habitats/1.1cv.Rds")
 
 #lists for storing results
 prey_res <- list()
@@ -148,7 +151,11 @@ for(G in 1:GENS) {
     # }
     
     benefits_prey <- mclapply(PREY_tracks, 
-                              function(track) grazing(mass_prey, track, FOOD), 
+                              function(track) grazing(mass_prey, 
+                                                      track, 
+                                                      FOOD, 
+                                                      k = k,
+                                                      max_per_step = max_per_step), 
                               mc.cores = Ncores)
     
     #extract number of changes between patches
@@ -211,8 +218,11 @@ for(G in 1:GENS) {
                             offspring = unlist(offspring_prey),
                             mass = mass_prey,
                             mass_update = unlist(mass_update_prey),
-                            cal_per_patch = target_n * cal,
-                            tot_patch = target_n)
+                            tot_patch = target_n, # density analysis
+                            cal_per_patch = cal,
+                            mu = mu, # clustering analysis
+                            cal_var = cv # variance analysis
+                            )
     
   } # closes loop over number of arenas
   
@@ -249,15 +259,15 @@ for(G in 1:GENS) {
     warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
     
     # save results of failed simulation
-      saveRDS(prey_res, file = 'simulations/prey_results/clustering/1.5mu_prey_res.Rds')
-      saveRDS(prey_details, file = 'simulations/prey_results/clustering/1.5mu_prey_details.Rds')
+      saveRDS(prey_res, file = 'simulations/sensitivity/variance/1.1cv_prey_res.Rds')
+      saveRDS(prey_details, file = 'simulations/sensitivity/variance/1.1cv_prey_details.Rds')
     
     break
     }
   
   #save results
-  saveRDS(prey_res, file = 'simulations/prey_results/clustering/1.5mu_prey_res.Rds')
-  saveRDS(prey_details, file = 'simulations/prey_results/clustering/1.5mu_prey_details.Rds')
+  saveRDS(prey_res, file = 'simulations/sensitivity/variance/1.1cv_prey_res.Rds')
+  saveRDS(prey_details, file = 'simulations/sensitivity/variance/1.1cv_prey_details.Rds')
 
   toc(log = TRUE)
 }

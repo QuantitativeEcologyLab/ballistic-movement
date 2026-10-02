@@ -100,7 +100,8 @@ explore.gen <- function(details_df) {
   
   p5 <-
     ggplot() + 
-    geom_point(data = details_df, aes(x = generation, y = offspring)) + 
+    geom_point(data = details_df, aes(x = generation, y = offspring), 
+               size = 0.1, alpha = 0.2, color = "grey70") + 
     stat_summary(data = details_df, aes(x = generation, y = speed), fun = "mean", geom = "line") +
     theme_bw()
   

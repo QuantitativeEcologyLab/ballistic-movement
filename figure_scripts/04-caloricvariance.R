@@ -14,7 +14,7 @@ source("simulation_scripts/01-prey-functions.R")
 #..............................................................................
 
 #load data from folder
-calories <- list.files(path = "simulations/prey_results/calorie-variance", 
+calories <- list.files(path = "simulations/sensitivity/variance", 
                     pattern = "prey_details\\.Rds$", 
                     full.names = TRUE) %>% 
   map(~ {
@@ -23,7 +23,8 @@ calories <- list.files(path = "simulations/prey_results/calorie-variance",
       # na.omit() %>% 
       group_by(cal_var) %>% 
       filter(generation >= max(generation) - 10) %>% 
-      summarise(cal_var = mean(cal_var),
+      summarise(cal = mean(cal_per_patch),
+                cv = mean(cal_var),
                 mean_lv = mean(lv),
                 mean_speed = mean(speed))
     return(data_list)
@@ -32,22 +33,23 @@ calories <- list.files(path = "simulations/prey_results/calorie-variance",
 
 # add column for labeling
 calories <- calories %>% 
-  filter(cal_var == 0 | cal_var >= 1000) %>%
+  filter(cv == 0 | cv > 0) %>%
   mutate(
     label = case_when(
-      cal_var == 0 ~ "label",
+      cv == 0 ~ "label",
       TRUE ~ "other"
     ),
-    cal_var = cal_var / 4000)
+    actual_var = (2 * cal * cv)^2 / 12,
+    cal_var = cv / sqrt(3))
 
 #fit model to data
-calories_lv <- glm(mean_lv ~ cal_var,
+calories_lv <- glm(mean_lv ~ cv,
                 data = calories, 
                 family = Gamma(link = "log"))
 
 #predict data from model
 calories_lv_data <- 
-  data.frame(cal_var = seq(min(calories$cal_var)-0.5, max(calories$cal_var)+0.5, length.out = 100)) %>% 
+  data.frame(cv = seq(min(calories$cv)-0.1, max(calories$cv)+0.1, length.out = 100)) %>% 
   mutate(pred = as.data.frame(predict(calories_lv, newdata = ., type = "link", se = TRUE)),
          fit = exp(pred$fit),
          lowerci = exp(pred$fit - pred$se.fit * 1.96),
@@ -58,14 +60,14 @@ p1 <-
   ggplot() +
   ggtitle("A") +
   geom_ribbon(data = calories_lv_data, 
-              aes(ymin = lowerci, ymax = upperci, x = cal_var), 
+              aes(ymin = lowerci, ymax = upperci, x = cv), 
               alpha = 0.3, fill = "#CC9BA5") +
-  geom_line(data = calories_lv_data, aes(x = cal_var, y = fit), col = "#401D1F") +
-  geom_point(data = calories, aes(x = cal_var, y = mean_lv, col = label)) +
+  geom_line(data = calories_lv_data, aes(x = cv, y = fit), col = "#401D1F") +
+  geom_point(data = calories, aes(x = cv, y = mean_lv, col = label)) +
   labs(x = "Caloric CoV", y = expression(bold(l[v] (m)))) +
   scale_color_manual(values = c("label" = "#0062b8", "other" = "grey20")) +
-  scale_x_continuous(expand = c(0,0), limits = c(min(calories_lv_data$cal_var), 
-                                                 max(calories_lv_data$cal_var))) +
+  scale_x_continuous(expand = c(0,0), limits = c(min(calories_lv_data$cv), 
+                                                 max(calories_lv_data$cv))) +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -84,12 +86,12 @@ p1 <-
 #        width = 6, height = 3, units = "in", bg = "white", dpi = 600)
 
 #model speed
-calories_speed <- glm(mean_speed ~ cal_var,
+calories_speed <- glm(mean_speed ~ cv,
                    data = calories, 
                    family = Gamma(link = "log"))
 
 calories_speed_data <- 
-  data.frame(cal_var = seq(min(calories$cal_var)-0.5, max(calories$cal_var)+0.5, length.out = 100)) %>% 
+  data.frame(cv = seq(min(calories$cv)-0.1, max(calories$cv)+0.1, length.out = 100)) %>% 
   mutate(pred = as.data.frame(predict(calories_speed, newdata = ., type = "link", se = TRUE)),
          fit = exp(pred$fit),
          lowerci = exp(pred$fit - pred$se.fit * 1.96),
@@ -100,14 +102,14 @@ p2 <-
   ggplot() +
   ggtitle("B") +
   geom_ribbon(data = calories_speed_data, 
-              aes(ymin = lowerci, ymax = upperci, x = cal_var), 
+              aes(ymin = lowerci, ymax = upperci, x = cv), 
               alpha = 0.3, fill = "#CC9BA5") +
-  geom_line(data = calories_speed_data, aes(x = cal_var, y = fit), col = "#401D1F") +
-  geom_point(data = calories, aes(x = cal_var, y = mean_speed, col = label)) +
+  geom_line(data = calories_speed_data, aes(x = cv, y = fit), col = "#401D1F") +
+  geom_point(data = calories, aes(x = cv, y = mean_speed, col = label)) +
   scale_color_manual(values = c("label" = "#0062b8", "other" = "grey20")) +
   labs(x = "Caloric CoV", y = "Speed (m/s)") +
-  scale_x_continuous(expand = c(0, 0), limits = c(min(calories_speed_data$cal_var), 
-                                                  max(calories_speed_data$cal_var))) +
+  scale_x_continuous(expand = c(0, 0), limits = c(min(calories_speed_data$cv), 
+                                                  max(calories_speed_data$cv))) +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
