@@ -63,9 +63,9 @@ _archive
 project_updates
 
 # ignore incomplete figures or figure components
-figures/ODD
-figures/vODD
-figures/all_sims
+figures/ODD/
+figures/vODD/
+figures/all_sims/
 
 #poster stuff
 presentations/poster-components
