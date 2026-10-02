@@ -7,6 +7,7 @@ setwd("~/hdrive/GitHub/ballistic-movement")
 library(tidyverse)
 library(data.table)
 library(mgcv)
+#library(khroma)
 
 # Source the functions 
 source("figure_scripts/00-diagnostic-functions.R")
@@ -116,7 +117,7 @@ ggplot(food1, aes(x = x, y = y, color = marks)) +
 
 food3 <- as.data.frame(makeHabitat(mass = 105500,
                                    mu = 1,
-                                   cv = 1.9,
+                                   cv = 0.15,
                                    n_points = 500,
                                    cal = 4000,
                                    seed = 123))

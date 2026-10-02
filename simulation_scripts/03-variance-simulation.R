@@ -44,7 +44,7 @@ max_per_step <- 10 # how many patches can an individual consume in one time step
 cal <- 4000
 target_n <- 500
 mu <- 1
-cv <- 1.1
+cv <- 0.025
   
 #updated food raster function
 FOOD <- makeHabitat(mass_prey,
@@ -52,16 +52,15 @@ FOOD <- makeHabitat(mass_prey,
                     n_points = target_n,
                     cal = cal,
                     cv = cv,
-                    seed = 123)
+                    seed = 1234)
 
-#check number of patches in landscape
-FOOD$n
+cov <- sd(FOOD$marks) / mean(FOOD$marks)
 
 #plot to see distribution of points
 #plot(FOOD$x, FOOD$y, pch = 16)
 
 #save the landscape
-saveRDS(FOOD, file = "simulations/sensitivity/variance/habitats/1.1cv.Rds")
+saveRDS(FOOD, file = "simulations/prey_results/calorie-variance/originals/habitats/0.025cv.Rds")
 
 #lists for storing results
 prey_res <- list()
@@ -221,7 +220,8 @@ for(G in 1:GENS) {
                             tot_patch = target_n, # density analysis
                             cal_per_patch = cal,
                             mu = mu, # clustering analysis
-                            cal_var = cv # variance analysis
+                            cal_var = cv, # variance analysis,
+                            cov = cov
                             )
     
   } # closes loop over number of arenas
@@ -229,10 +229,6 @@ for(G in 1:GENS) {
   prey <- bind_rows(prey)
   
   # save the results
-  prey_res[[G]] <- data.frame(generation = G, 
-                              lv = mean(prey$lv),
-                              var = var(prey$lv))
-  
   prey_details[[G]] <- prey
   
   #Set up the parameters for the next generation based on
@@ -259,17 +255,13 @@ for(G in 1:GENS) {
     warning(sprintf("Simulation stopped early at generation %d due to extinction (no offspring)", G))
     
     # save results of failed simulation
-      saveRDS(prey_res, file = 'simulations/sensitivity/variance/1.1cv_prey_res.Rds')
-      saveRDS(prey_details, file = 'simulations/sensitivity/variance/1.1cv_prey_details.Rds')
+      saveRDS(prey_details, file = 'simulations/prey_results/calorie-variance/duplicates/prey_details/0.025cv_prey_details.Rds')
     
     break
     }
   
   #save results
-  saveRDS(prey_res, file = 'simulations/sensitivity/variance/1.1cv_prey_res.Rds')
-  saveRDS(prey_details, file = 'simulations/sensitivity/variance/1.1cv_prey_details.Rds')
+  saveRDS(prey_details, file = 'simulations/prey_results/calorie-variance/duplicates/prey_details/0.025cv_prey_details.Rds')
 
   toc(log = TRUE)
 }
-
-

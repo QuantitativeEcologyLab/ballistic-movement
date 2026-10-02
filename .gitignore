@@ -51,21 +51,21 @@ rsconnect/
 # other
 *.db
 
-# ignore result files and old results
+# ignore simulation save files
 *.Rda
 *.Rds
-simulations
+simulations/
 
 # ignore old scripts
-simulation_scripts/scratch_scripts/
-simulation_scripts/predators/
+_archive
 
 # ignore project update files
 project_updates
 
-# figures
-figure_scripts/scratch
-figures/maintext
+# ignore incomplete figures or figure components
+figures/ODD
+figures/vODD
+figures/all_sims
 
 #poster stuff
 presentations/poster-components
